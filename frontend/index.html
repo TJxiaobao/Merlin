@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧙 Merlin - AI表格填充助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #667eea;
+            --primary-dark: #5568d3;
+            --success-color: #48bb78;
+            --error-color: #f56565;
+            --bg-color: #f7fafc;
+            --card-bg: #ffffff;
+            --text-primary: #2d3748;
+            --text-secondary: #718096;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+            --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--text-primary);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            display: flex;
+            flex-direction: row;
+            height: calc(100vh - 180px);
+            min-height: 650px;
+        }
+
+        .sidebar {
+            width: 340px;
+            flex-shrink: 0;
+            border-right: 2px solid var(--border-color);
+            background: linear-gradient(to bottom, #f7fafc, #ffffff);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+
+        .file-upload-section {
+            padding: 25px 20px;
+            flex-shrink: 0;
+        }
+
+        .file-upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--primary-color);
+            background: #fafcff;
+        }
+
+        .file-upload-area.dragover {
+            border-color: var(--primary-color);
+            background: #f0f4ff;
+        }
+
+        .upload-icon {
+            font-size: 2em;
+            margin-bottom: 8px;
+        }
+
+        .upload-text {
+            font-size: 1em;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .upload-hint {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .file-info {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            color: white;
+        }
+
+        .file-info.active {
+            display: block;
+        }
+
+        .file-info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .file-info-title {
+            font-size: 0.9em;
+            font-weight: 600;
+            line-height: 1.4;
+            word-break: break-all;
+            flex: 1;
+            padding-right: 10px;
+        }
+
+        .file-info-stats {
+            font-size: 0.85em;
+            margin-bottom: 12px;
+            opacity: 0.95;
+        }
+
+        .file-info-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .file-info-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .columns-section {
+            margin-top: 12px;
+        }
+
+        .columns-section-title {
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            opacity: 0.9;
+        }
+
+        .columns-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .columns-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .columns-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .columns-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        .column-tag {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            white-space: nowrap;
+        }
+
+        .chat-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #fafafa;
+        }
+
+        .message {
+            margin-bottom: 18px;
+            display: flex;
+            gap: 12px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 14px 20px;
+            border-radius: 16px;
+            line-height: 1.7;
+            font-size: 0.96em;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: var(--text-primary);
+            border-bottom-left-radius: 5px;
+            box-shadow: var(--shadow);
+        }
+
+        .message-content pre {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+
+        .message.user .message-content pre {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .input-section {
+            padding: 25px 30px;
+            border-top: 2px solid var(--border-color);
+            background: white;
+            flex-shrink: 0;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        #commandInput {
+            flex: 1;
+            padding: 16px 24px;
+            border: 2px solid var(--border-color);
+            border-radius: 30px;
+            font-size: 1em;
+            outline: none;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        #commandInput:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        #commandInput:disabled {
+            background: #f7fafc;
+            cursor: not-allowed;
+        }
+
+        .btn {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 30px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #38a169;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .welcome-message {
+            text-align: center;
+            padding: 80px 40px;
+            color: var(--text-secondary);
+        }
+
+        .welcome-message h2 {
+            margin-bottom: 18px;
+            color: var(--text-primary);
+            font-size: 2em;
+        }
+
+        .welcome-message > p {
+            font-size: 1.05em;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .welcome-examples {
+            margin-top: 35px;
+            text-align: left;
+            max-width: 550px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .welcome-examples h3 {
+            margin-bottom: 18px;
+            color: var(--text-primary);
+            font-size: 1.1em;
+        }
+
+        .example {
+            background: white;
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border-left: 3px solid transparent;
+        }
+
+        .example:hover {
+            background: #f0f4ff;
+            transform: translateX(8px);
+            border-left-color: var(--primary-color);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: var(--success-color);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(72, 187, 120, 0.3);
+        }
+
+        .download-btn:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(72, 187, 120, 0.4);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 280px;
+            }
+            
+            .columns-list {
+                max-height: 150px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .main-card {
+                height: calc(100vh - 140px);
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 2px solid var(--border-color);
+                max-height: 40vh;
+            }
+            
+            .message-content {
+                max-width: 85%;
+                font-size: 0.9em;
+            }
+            
+            .columns-list {
+                max-height: 100px;
+            }
+            
+            .welcome-examples {
+                max-width: 100%;
+            }
+            
+            .input-section {
+                padding: 15px 20px;
+            }
+        }
+
+        /* 滚动条样式 */
+        .messages-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧙 Merlin</h1>
+            <p>AI表格填充助手 - 用自然语言操作Excel</p>
+        </div>
+
+        <div class="main-card">
+            <!-- 左侧边栏 -->
+            <div class="sidebar">
+                <!-- 文件上传区 -->
+                <div class="file-upload-section">
+                    <div class="file-upload-area" id="dropZone">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">点击或拖拽上传</div>
+                        <div class="upload-hint">支持 .xlsx 格式</div>
+                        <input type="file" id="fileInput" accept=".xlsx">
+                    </div>
+
+                    <!-- 文件信息卡片 -->
+                    <div class="file-info" id="fileInfo">
+                        <div class="file-info-header">
+                            <div class="file-info-title" id="fileName"></div>
+                            <button class="file-info-close" id="closeFile">×</button>
+                        </div>
+                        <div class="file-info-stats">
+                            📊 <strong>总行数:</strong> <span id="totalRows"></span><br>
+                            📋 <strong>总列数:</strong> <span id="totalColumns"></span>
+                        </div>
+                        <div class="columns-section">
+                            <div class="columns-section-title">📝 列名列表:</div>
+                            <div class="columns-list" id="columnsList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧聊天区域 -->
+            <div class="chat-section">
+                <div class="messages-container" id="messagesContainer">
+                    <div class="welcome-message" id="welcomeMessage">
+                        <h2>👋 欢迎使用 Merlin</h2>
+                        <p>请先上传一个 Excel 文件，然后用自然语言告诉我你想做什么</p>
+                        
+                        <div class="welcome-examples">
+                            <h3>💡 示例指令：</h3>
+                            <div class="example" onclick="fillExample('把所有税率设为0.13')">
+                                "把所有税率设为0.13"
+                            </div>
+                            <div class="example" onclick="fillExample('把Gateway的价格设为100')">
+                                "把Gateway的价格设为100"
+                            </div>
+                            <div class="example" onclick="fillExample('统计设备类型的分布')">
+                                "统计设备类型的分布" ⭐️ 新增
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 输入区域 -->
+                <div class="input-section">
+                    <div class="input-container">
+                        <input 
+                            type="text" 
+                            id="commandInput" 
+                            placeholder="请先上传Excel文件..." 
+                            disabled
+                        >
+                        <button class="btn btn-primary" id="sendBtn" disabled>
+                            <span id="sendBtnText">发送</span>
+                        </button>
+                    </div>
+                    <div class="action-buttons" id="actionButtons" style="display: none;">
+                        <button class="download-btn" id="downloadBtn" style="display: none;">
+                            📥 下载修改后的文件
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
