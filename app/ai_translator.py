@@ -23,7 +23,7 @@ TOOL_GROUPS = {
         "tools": ["set_column_value", "set_by_condition", "copy_column", "set_by_mapping"]
     },
     "math": {
-        "keywords": ["计算", "乘以", "除以", "加", "减", "总价", "利润", "等于", "乘", "除", "加上", "减去", "×", "÷", "+", "-"],
+        "keywords": ["计算", "乘以", "除以", "加", "减", "总价", "利润", "等于", "加上", "减去", "×", "÷", "+", "-"],
         "tools": ["perform_math"]
     },
     "cleaning": {

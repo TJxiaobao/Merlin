@@ -196,17 +196,28 @@ async function sendCommand() {
         removeLastMessage();
 
         if (result.success) {
-            // 显示执行结果
-            let message = '✅ 执行成功！\n\n';
-            result.execution_log.forEach(log => {
-                message += log + '\n';
-            });
-            
-            addMessage('assistant', message);
+            // ⭐️ v0.1.0-alpha: 区分执行成功和友好提示
+            if (result.execution_log && result.execution_log.length > 0) {
+                // 有 execution_log，说明是真正的操作执行
+                let message = '✅ 执行成功！\n\n';
+                result.execution_log.forEach(log => {
+                    message += log + '\n';
+                });
+                
+                addMessage('assistant', message);
 
-            // 显示下载按钮
-            downloadBtn.style.display = 'inline-flex';
-            actionButtons.style.display = 'flex';
+                // 显示下载按钮
+                downloadBtn.style.display = 'inline-flex';
+                actionButtons.style.display = 'flex';
+            } else if (result.message) {
+                // 没有 execution_log 但有 message，说明是友好提示或帮助信息
+                addMessage('assistant', result.message);
+                
+                // 友好提示不显示下载按钮
+            } else {
+                // 既没有 log 也没有 message（不应该发生）
+                addMessage('assistant', '✅ 操作完成');
+            }
 
         } else {
             // ⭐️ v0.1.0: 优化错误显示，支持建议提示
