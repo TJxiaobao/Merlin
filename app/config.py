@@ -1,5 +1,8 @@
 """
 配置管理模块
+
+Author: TJxiaobao
+License: MIT
 """
 import os
 from pathlib import Path

@@ -6,6 +6,9 @@ Merlin 统一测试脚本
   - full: 完整测试（多个场景）
   - mapping: 批量映射测试
   - engine: 仅测试引擎（不调用AI）
+
+Author: TJxiaobao
+License: MIT
 """
 import sys
 import time

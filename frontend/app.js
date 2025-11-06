@@ -1,4 +1,9 @@
-// Merlin Frontend - JavaScript
+/**
+ * Merlin Frontend - JavaScript
+ * 
+ * Author: TJxiaobao
+ * License: MIT
+ */
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -21,6 +26,9 @@ const sendBtn = document.getElementById('sendBtn');
 const sendBtnText = document.getElementById('sendBtnText');
 const downloadBtn = document.getElementById('downloadBtn');
 const actionButtons = document.getElementById('actionButtons');
+const magicWandBtn = document.getElementById('magicWandBtn');
+const featureModal = document.getElementById('featureModal');
+const modalClose = document.getElementById('modalClose');
 
 // 文件上传 - 点击
 dropZone.addEventListener('click', () => {
@@ -139,6 +147,7 @@ async function uploadFile(file) {
         commandInput.disabled = false;
         commandInput.placeholder = '输入指令，例如: 把所有税率设为0.13';
         sendBtn.disabled = false;
+        magicWandBtn.disabled = false;  // 启用魔法棒按钮
         commandInput.focus();
 
     } catch (error) {
@@ -200,12 +209,28 @@ async function sendCommand() {
             actionButtons.style.display = 'flex';
 
         } else {
-            addMessage('assistant', `❌ 执行失败:\n${result.error || result.message}`);
+            // ⭐️ v0.1.0: 优化错误显示，支持建议提示
+            let errorMessage = '❌ 操作遇到问题\n\n';
+            
+            // 显示错误信息
+            if (result.execution_log && result.execution_log.length > 0) {
+                errorMessage += result.execution_log.join('\n\n');
+            } else {
+                errorMessage += result.error || result.message || '未知错误';
+            }
+            
+            addMessage('assistant', errorMessage);
         }
 
     } catch (error) {
         removeLastMessage();
-        addMessage('assistant', `❌ 出错了: ${error.message}`);
+        // ⭐️ v0.1.0: 更友好的网络错误提示
+        let errorMsg = '❌ 出错了\n\n';
+        errorMsg += error.message || '连接服务器失败';
+        errorMsg += '\n\n💡 **提示**：\n';
+        errorMsg += '• 请确保后端服务正在运行\n';
+        errorMsg += '• 运行命令：python -m uvicorn app.main:app --reload';
+        addMessage('assistant', errorMsg);
     } finally {
         // 恢复输入
         commandInput.disabled = false;
@@ -291,6 +316,40 @@ async function checkServerConnection() {
         return false;
     }
 }
+
+// 魔法棒按钮 - 打开功能示例模态框
+magicWandBtn.addEventListener('click', () => {
+    featureModal.style.display = 'flex';
+});
+
+// 关闭模态框
+modalClose.addEventListener('click', () => {
+    featureModal.style.display = 'none';
+});
+
+// 点击模态框背景关闭
+featureModal.addEventListener('click', (e) => {
+    if (e.target === featureModal) {
+        featureModal.style.display = 'none';
+    }
+});
+
+// 按ESC键关闭模态框
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && featureModal.style.display === 'flex') {
+        featureModal.style.display = 'none';
+    }
+});
+
+// 点击功能示例，填充到输入框
+document.querySelectorAll('.feature-example').forEach(example => {
+    example.addEventListener('click', () => {
+        const command = example.getAttribute('data-command');
+        commandInput.value = command;
+        featureModal.style.display = 'none';
+        commandInput.focus();
+    });
+});
 
 // 页面加载完成后检查服务器
 document.addEventListener('DOMContentLoaded', () => {

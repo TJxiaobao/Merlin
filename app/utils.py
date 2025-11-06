@@ -1,5 +1,8 @@
 """
 工具函数模块
+
+Author: TJxiaobao
+License: MIT
 """
 from typing import Any
 import logging

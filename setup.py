@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
 Merlin 配置向导 - 快速配置 API 密钥
+
+Author: TJxiaobao
+License: MIT
 """
 from pathlib import Path
 

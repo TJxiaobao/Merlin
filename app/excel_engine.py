@@ -1,11 +1,15 @@
 """
 Excel操作引擎 - 使用Pandas执行实际的表格操作
 这个模块是"双手"，只负责执行，不负责理解
+
+Author: TJxiaobao
+License: MIT
 """
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import logging
+from difflib import get_close_matches  # v0.1.0: 用于模糊匹配列名
 
 from .utils import convert_value
 from .config import config
@@ -37,6 +41,32 @@ class ExcelEngine:
         """智能类型转换（使用工具类）"""
         return convert_value(value)
     
+    def _generate_column_not_found_error(self, column_name: str) -> Dict:
+        """
+        生成列不存在时的友好错误信息（带模糊匹配建议）
+        Args:
+            column_name: 用户输入的列名
+        Returns:
+            包含错误和建议的字典
+        """
+        # 使用模糊匹配找相似的列名
+        similar_columns = get_close_matches(column_name, self.df.columns, n=3, cutoff=0.6)
+        
+        error_msg = f"❌ 列 '{column_name}' 不存在"
+        
+        if similar_columns:
+            suggestion = f"💡 **建议**：您是否想操作以下列？\n"
+            suggestion += "\n".join([f"  • {col}" for col in similar_columns])
+            suggestion += f"\n\n当前表格的所有列：{', '.join(self.df.columns[:5])}{'...' if len(self.df.columns) > 5 else ''}"
+        else:
+            suggestion = f"💡 **建议**：\n• 当前表格的列：{', '.join(self.df.columns)}\n• 请检查列名拼写和大小写"
+        
+        return {
+            "success": False,
+            "error": error_msg,
+            "suggestion": suggestion
+        }
+    
     def get_headers(self) -> List[str]:
         """获取所有列名"""
         return list(self.df.columns)
@@ -59,9 +89,7 @@ class ExcelEngine:
             执行结果
         """
         if column not in self.df.columns:
-            error_msg = f"列'{column}'不存在。可用列: {list(self.df.columns)}"
-            logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+            return self._generate_column_not_found_error(column)
         
         try:
             # 智能类型转换
@@ -381,23 +409,45 @@ class ExcelEngine:
         
         # 检查第一个列是否存在
         if source_column_1 not in self.df.columns:
-            return {
-                "success": False,
-                "error": f"列 '{source_column_1}' 不存在"
-            }
+            return self._generate_column_not_found_error(source_column_1)
         
         try:
-            # 准备第一个操作数（健壮性处理：将非数字转为0）
-            col_1_data = pd.to_numeric(self.df[source_column_1], errors='coerce').fillna(0)
-            non_numeric_count_1 = self.df[source_column_1].isna().sum()
+            # ⭐️ 智能检查：第一个列是否全部为文本
+            col_1_numeric = pd.to_numeric(self.df[source_column_1], errors='coerce')
+            non_numeric_count_1 = col_1_numeric.isna().sum()
+            total_count = len(self.df)
+            
+            # 如果超过50%无法转换，很可能是文本列
+            if non_numeric_count_1 > total_count * 0.5:
+                sample_values = self.df[source_column_1].head(3).tolist()
+                return {
+                    "success": False,
+                    "error": f"❌ 列 '{source_column_1}' 主要包含文本，无法进行数学运算",
+                    "suggestion": f"💡 **建议**：\n• 该列的样本值：{sample_values}\n• 如果包含数字，请先使用'查找替换'清理特殊字符\n• 或者选择一个纯数字列进行计算"
+                }
+            
+            # 准备第一个操作数（将非数字转为0）
+            col_1_data = col_1_numeric.fillna(0)
             
             # 准备第二个操作数
             is_column = source_column_2_or_number in self.df.columns
             
             if is_column:
+                # ⭐️ 智能检查：第二个列是否全部为文本
+                col_2_numeric = pd.to_numeric(self.df[source_column_2_or_number], errors='coerce')
+                non_numeric_count_2 = col_2_numeric.isna().sum()
+                
+                # 如果超过50%无法转换，很可能是文本列
+                if non_numeric_count_2 > total_count * 0.5:
+                    sample_values = self.df[source_column_2_or_number].head(3).tolist()
+                    return {
+                        "success": False,
+                        "error": f"❌ 列 '{source_column_2_or_number}' 主要包含文本，无法进行数学运算",
+                        "suggestion": f"💡 **建议**：\n• 该列的样本值：{sample_values}\n• 如果包含数字，请先使用'查找替换'清理特殊字符\n• 或者选择一个纯数字列进行计算"
+                    }
+                
                 # 如果是列名
-                col_2_data = pd.to_numeric(self.df[source_column_2_or_number], errors='coerce').fillna(0)
-                non_numeric_count_2 = self.df[source_column_2_or_number].isna().sum()
+                col_2_data = col_2_numeric.fillna(0)
                 operand_desc = f"列 '{source_column_2_or_number}'"
             else:
                 # 如果是数字
@@ -408,7 +458,8 @@ class ExcelEngine:
                 except:
                     return {
                         "success": False,
-                        "error": f"'{source_column_2_or_number}' 既不是有效的列名也不是有效的数字"
+                        "error": f"❌ '{source_column_2_or_number}' 既不是有效的列名也不是有效的数字",
+                        "suggestion": f"💡 **建议**：\n• 检查列名是否正确（当前表格列名：{', '.join(self.df.columns[:5])}{'...' if len(self.df.columns) > 5 else ''}）\n• 如果是数字，请确保没有多余的空格或特殊字符"
                     }
             
             # 执行运算
@@ -467,9 +518,13 @@ class ExcelEngine:
             }
             
         except Exception as e:
-            error_msg = f"数学计算失败: {str(e)}"
+            error_msg = f"❌ 数学计算失败: {str(e)}"
             logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+            return {
+                "success": False,
+                "error": error_msg,
+                "suggestion": "💡 **建议**：请检查列名是否正确，或尝试简化计算步骤"
+            }
     
     def trim_whitespace(self, column: str) -> Dict:
         """
@@ -480,10 +535,7 @@ class ExcelEngine:
             执行结果
         """
         if column not in self.df.columns:
-            return {
-                "success": False,
-                "error": f"列 '{column}' 不存在"
-            }
+            return self._generate_column_not_found_error(column)
         
         try:
             # 清理空格
@@ -589,6 +641,396 @@ class ExcelEngine:
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
     
+    def concatenate_columns(
+        self,
+        target_column: str,
+        source_columns: List[str],
+        delimiter: str = " "
+    ) -> Dict:
+        """
+        合并多列为一列
+        Args:
+            target_column: 新列名称
+            source_columns: 要合并的源列名列表
+            delimiter: 连接符（默认为空格）
+        Returns:
+            执行结果
+        """
+        # 检查源列是否存在
+        missing_cols = [col for col in source_columns if col not in self.df.columns]
+        if missing_cols:
+            return {
+                "success": False,
+                "error": f"以下列不存在: {', '.join(missing_cols)}"
+            }
+        
+        try:
+            # 健壮性：确保所有源列都是字符串
+            self.df[target_column] = self.df[source_columns].astype(str).agg(delimiter.join, axis=1)
+            
+            log_msg = f"✅ 已将 {len(source_columns)} 列合并为 '{target_column}'，使用 '{delimiter}' 连接"
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            
+            return {
+                "success": True,
+                "message": log_msg,
+                "affected_rows": len(self.df)
+            }
+            
+        except Exception as e:
+            error_msg = f"列合并失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def extract_date_part(
+        self,
+        source_column: str,
+        target_column: str,
+        part_to_extract: str
+    ) -> Dict:
+        """
+        从日期列提取组件（年/月/日/星期/季度）
+        Args:
+            source_column: 源日期列名
+            target_column: 目标列名
+            part_to_extract: 要提取的部分（year/month/day/weekday/quarter）
+        Returns:
+            执行结果
+        """
+        if source_column not in self.df.columns:
+            return self._generate_column_not_found_error(source_column)
+        
+        try:
+            # 关键：健壮地转为日期，无法解析的变为 NaT
+            date_series = pd.to_datetime(self.df[source_column], errors='coerce')
+            
+            # 检查是否全部无法解析
+            null_count = date_series.isnull().sum()
+            if date_series.isnull().all():
+                return {
+                    "success": False,
+                    "error": f"无法将 '{source_column}' 列解析为日期"
+                }
+            
+            # 提取对应部分
+            if part_to_extract == 'year':
+                self.df[target_column] = date_series.dt.year
+                part_desc = "年份"
+            elif part_to_extract == 'month':
+                self.df[target_column] = date_series.dt.month
+                part_desc = "月份"
+            elif part_to_extract == 'day':
+                self.df[target_column] = date_series.dt.day
+                part_desc = "日期"
+            elif part_to_extract == 'weekday':
+                # 中文星期几更友好
+                weekdays_chinese = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+                self.df[target_column] = date_series.dt.weekday.apply(
+                    lambda x: weekdays_chinese[int(x)] if pd.notna(x) else None
+                )
+                part_desc = "星期几"
+            elif part_to_extract == 'quarter':
+                self.df[target_column] = date_series.dt.quarter
+                part_desc = "季度"
+            else:
+                return {
+                    "success": False,
+                    "error": f"不支持的日期部分: {part_to_extract}"
+                }
+            
+            log_msg = f"✅ 已从 '{source_column}' 提取 {part_desc} 到 '{target_column}'"
+            if null_count > 0:
+                log_msg += f"\n⚠️  {null_count} 个单元格无法解析为日期"
+            
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            
+            return {
+                "success": True,
+                "message": log_msg,
+                "affected_rows": len(self.df)
+            }
+            
+        except Exception as e:
+            error_msg = f"日期提取失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def group_by_aggregate(
+        self,
+        group_by_column: str,
+        agg_column: str,
+        agg_func: str
+    ) -> Dict:
+        """
+        分组聚合统计（只统计，不修改表格）
+        Args:
+            group_by_column: 分组列名
+            agg_column: 聚合计算的列名
+            agg_func: 聚合函数（mean/sum/count）
+        Returns:
+            执行结果（包含统计文本）
+        """
+        # 检查列是否存在
+        if group_by_column not in self.df.columns:
+            return {
+                "success": False,
+                "error": f"分组列 '{group_by_column}' 不存在"
+            }
+        if agg_column not in self.df.columns:
+            return {
+                "success": False,
+                "error": f"聚合列 '{agg_column}' 不存在"
+            }
+        
+        try:
+            # 健壮性：对于数值聚合，确保列是数字类型
+            if agg_func in ['mean', 'sum']:
+                self.df[agg_column] = pd.to_numeric(self.df[agg_column], errors='coerce').fillna(0)
+            
+            # 执行分组聚合
+            grouped_data = self.df.groupby(group_by_column)[agg_column].agg(agg_func)
+            
+            # 格式化结果
+            func_name_map = {
+                'mean': '平均值',
+                'sum': '总和',
+                'count': '计数'
+            }
+            func_desc = func_name_map.get(agg_func, agg_func)
+            
+            result_text = f"📊 按 '{group_by_column}' 分组，'{agg_column}' 的 {func_desc}：\n"
+            result_text += "=" * 40 + "\n"
+            result_text += grouped_data.to_string()
+            
+            logger.info(f"分组聚合完成: {group_by_column} -> {agg_column} ({agg_func})")
+            self.execution_log.append(result_text)
+            
+            # 重要：标记为分析类工具（不修改表格，不保存）
+            return {
+                "success": True,
+                "message": result_text,
+                "is_analysis": True  # 特殊标记
+            }
+            
+        except Exception as e:
+            error_msg = f"分组聚合失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def split_column(
+        self,
+        source_column: str,
+        delimiter: str,
+        new_column_names: Optional[List[str]] = None
+    ) -> Dict:
+        """
+        拆分列（按分隔符将一列拆分为多列）
+        Args:
+            source_column: 要拆分的源列名
+            delimiter: 分隔符
+            new_column_names: 可选的新列名列表。如果未提供，自动命名为 源列名_1, 源列名_2 等
+        Returns:
+            执行结果
+        """
+        if source_column not in self.df.columns:
+            return {
+                "success": False,
+                "error": f"列 '{source_column}' 不存在"
+            }
+        
+        try:
+            # 拆分成一个临时的 DataFrame
+            split_data = self.df[source_column].astype(str).str.split(delimiter, expand=True)
+            actual_parts = split_data.shape[1]
+            
+            warnings = []
+            
+            # 确定新列名
+            if new_column_names:
+                if len(new_column_names) < actual_parts:
+                    # 补全缺失的列名
+                    original_len = len(new_column_names)
+                    new_column_names.extend([f"{source_column}_{i+1}" for i in range(original_len, actual_parts)])
+                    warnings.append(f"⚠️ 实际拆分了 {actual_parts} 列，您提供了 {original_len} 个列名，已自动补全")
+                elif len(new_column_names) > actual_parts:
+                    # 截断多余的列名
+                    original_len = len(new_column_names)
+                    new_column_names = new_column_names[:actual_parts]
+                    warnings.append(f"⚠️ 实际拆分了 {actual_parts} 列，但您提供了 {original_len} 个列名，已截断")
+            else:
+                new_column_names = [f"{source_column}_{i+1}" for i in range(actual_parts)]
+            
+            # 赋给新的列
+            split_data.columns = new_column_names
+            self.df = pd.concat([self.df, split_data], axis=1)
+            
+            log_msg = f"✅ 已将 '{source_column}' 列按 '{delimiter}' 拆分为 {len(new_column_names)} 列"
+            if warnings:
+                log_msg += "\n" + "\n".join(warnings)
+            
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            
+            return {
+                "success": True,
+                "message": log_msg,
+                "affected_rows": len(self.df),
+                "new_columns": new_column_names
+            }
+            
+        except Exception as e:
+            error_msg = f"列拆分失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def change_case(
+        self,
+        column_name: str,
+        case_type: str
+    ) -> Dict:
+        """
+        更改列的大小写
+        Args:
+            column_name: 列名
+            case_type: 大小写类型（upper/lower/proper）
+        Returns:
+            执行结果
+        """
+        if column_name not in self.df.columns:
+            return {
+                "success": False,
+                "error": f"列 '{column_name}' 不存在"
+            }
+        
+        try:
+            case_desc_map = {
+                'upper': '大写',
+                'lower': '小写',
+                'proper': '首字母大写'
+            }
+            
+            if case_type == 'upper':
+                self.df[column_name] = self.df[column_name].astype(str).str.upper()
+            elif case_type == 'lower':
+                self.df[column_name] = self.df[column_name].astype(str).str.lower()
+            elif case_type == 'proper':
+                self.df[column_name] = self.df[column_name].astype(str).str.title()  # Pandas 的 title() 即 Excel 的 PROPER()
+            else:
+                return {
+                    "success": False,
+                    "error": f"不支持的大小写类型 '{case_type}'，请使用 upper/lower/proper"
+                }
+            
+            case_desc = case_desc_map.get(case_type, case_type)
+            log_msg = f"✅ 已将 '{column_name}' 列转为{case_desc}"
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            
+            return {
+                "success": True,
+                "message": log_msg,
+                "affected_rows": len(self.df)
+            }
+            
+        except Exception as e:
+            error_msg = f"大小写转换失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def drop_duplicates(
+        self,
+        subset_columns: Optional[List[str]] = None
+    ) -> Dict:
+        """
+        删除重复行
+        Args:
+            subset_columns: 用于判断重复的列。如果为 None，则判断所有列
+        Returns:
+            执行结果
+        """
+        try:
+            original_count = len(self.df)
+            
+            # 如果 subset_columns 是空列表，Pandas 会报错，需转为 None
+            subset = subset_columns if subset_columns else None
+            
+            # 验证列是否存在
+            if subset:
+                missing_cols = [col for col in subset if col not in self.df.columns]
+                if missing_cols:
+                    return {
+                        "success": False,
+                        "error": f"以下列不存在: {', '.join(missing_cols)}"
+                    }
+            
+            self.df.drop_duplicates(subset=subset, keep='first', inplace=True)
+            self.df.reset_index(drop=True, inplace=True)  # 重置索引
+            
+            new_count = len(self.df)
+            deleted_count = original_count - new_count
+            
+            if subset:
+                log_msg = f"✅ 已根据 {', '.join(subset)} 列删除 {deleted_count} 行重复数据（保留首次出现）"
+            else:
+                log_msg = f"✅ 已删除 {deleted_count} 行完全重复的数据（保留首次出现）"
+            
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            
+            return {
+                "success": True,
+                "message": log_msg,
+                "deleted_rows": deleted_count,
+                "remaining_rows": new_count
+            }
+            
+        except Exception as e:
+            error_msg = f"删除重复行失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def sort_by_column(
+        self,
+        column_name: str,
+        ascending: bool = True
+    ) -> Dict:
+        """
+        按列排序
+        Args:
+            column_name: 排序依据的列名
+            ascending: 是否升序（True=升序，False=降序）
+        Returns:
+            执行结果
+        """
+        if column_name not in self.df.columns:
+            return {
+                "success": False,
+                "error": f"列 '{column_name}' 不存在"
+            }
+        
+        try:
+            self.df.sort_values(by=column_name, ascending=ascending, inplace=True)
+            self.df.reset_index(drop=True, inplace=True)  # 重置索引
+            
+            order_desc = "升序" if ascending else "降序"
+            log_msg = f"✅ 已按 '{column_name}' 列{order_desc}排序"
+            
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            
+            return {
+                "success": True,
+                "message": log_msg,
+                "affected_rows": len(self.df)
+            }
+            
+        except Exception as e:
+            error_msg = f"排序失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
     def save(self, output_path: Optional[str] = None) -> str:
         """
         保存修改后的文件
@@ -626,5 +1068,12 @@ TOOL_FUNCTIONS = {
     "trim_whitespace": ExcelEngine.trim_whitespace,
     "fill_missing_values": ExcelEngine.fill_missing_values,
     "find_and_replace": ExcelEngine.find_and_replace,
+    "concatenate_columns": ExcelEngine.concatenate_columns,  # v0.0.4-alpha
+    "extract_date_part": ExcelEngine.extract_date_part,      # v0.0.4-alpha
+    "group_by_aggregate": ExcelEngine.group_by_aggregate,    # v0.0.4-alpha
+    "split_column": ExcelEngine.split_column,                # v0.0.4-beta
+    "change_case": ExcelEngine.change_case,                  # v0.0.4-beta
+    "drop_duplicates": ExcelEngine.drop_duplicates,          # v0.0.4-beta
+    "sort_by_column": ExcelEngine.sort_by_column,            # v0.0.4-beta
 }
 

@@ -544,6 +544,184 @@
         .messages-container::-webkit-scrollbar-thumb:hover {
             background: #a0aec0;
         }
+
+        /* 魔法棒按钮样式 */
+        .magic-wand-btn {
+            padding: 16px 20px;
+            border: 2px solid var(--primary-color);
+            background: white;
+            color: var(--primary-color);
+            border-radius: 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+            font-weight: 600;
+        }
+
+        .magic-wand-btn:hover:not(:disabled) {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .magic-wand-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* 功能示例模态框 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.2s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 35px;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s;
+            position: relative;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .modal-title {
+            font-size: 1.6em;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 2em;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            background: #f7fafc;
+            color: var(--text-primary);
+        }
+
+        .feature-category {
+            margin-bottom: 25px;
+        }
+
+        .category-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .feature-example {
+            background: #f7fafc;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .feature-example:hover {
+            background: #f0f4ff;
+            border-left-color: var(--primary-color);
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+        }
+
+        .feature-example-text {
+            flex: 1;
+            color: var(--text-primary);
+            font-size: 0.95em;
+        }
+
+        .feature-example-hint {
+            color: var(--text-secondary);
+            font-size: 0.75em;
+            margin-left: 10px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .feature-example:hover .feature-example-hint {
+            opacity: 1;
+        }
+
+        .modal-footer {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 2px solid var(--border-color);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                max-width: 90%;
+                padding: 25px 20px;
+            }
+
+            .magic-wand-btn {
+                padding: 14px 16px;
+                font-size: 1.1em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -608,6 +786,7 @@
                 <!-- 输入区域 -->
                 <div class="input-section">
                     <div class="input-container">
+                        <button class="magic-wand-btn" id="magicWandBtn" disabled title="查看功能示例">✨</button>
                         <input 
                             type="text" 
                             id="commandInput" 
@@ -624,6 +803,136 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 功能示例模态框 -->
+    <div class="modal-overlay" id="featureModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">✨ Merlin 魔法指令</h2>
+                <button class="modal-close" id="modalClose">×</button>
+            </div>
+
+            <div class="feature-category">
+                <h3 class="category-title">📝 数据填充与修改</h3>
+                <div class="feature-example" data-command="把所有税率设为0.13">
+                    <span class="feature-example-text">把所有税率设为0.13</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="把设备类型是Gateway的未税单价设为100">
+                    <span class="feature-example-text">把设备类型是Gateway的未税单价设为100</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="把设备编码为196001的价格设为100，196002的设为200">
+                    <span class="feature-example-text">把设备编码为196001的价格设为100，196002的设为200</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+            </div>
+
+            <div class="feature-category">
+                <h3 class="category-title">🧮 数学计算 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.2</span></h3>
+                <div class="feature-example" data-command="让总价等于数量乘以单价">
+                    <span class="feature-example-text">让总价等于数量乘以单价</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="计算利润等于售价减去成本价">
+                    <span class="feature-example-text">计算利润等于售价减去成本价</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="把未税单价乘以1.13存入含税单价，保留2位小数">
+                    <span class="feature-example-text">把未税单价乘以1.13存入含税单价，保留2位小数</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+            </div>
+
+            <div class="feature-category">
+                <h3 class="category-title">🧹 数据清洗 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.2</span></h3>
+                <div class="feature-example" data-command="清理设备名称列的空格">
+                    <span class="feature-example-text">清理设备名称列的空格</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="把备注列的空白单元格填充为N/A">
+                    <span class="feature-example-text">把备注列的空白单元格填充为N/A</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="把客户区域列里的北京都替换成华北区">
+                    <span class="feature-example-text">把客户区域列里的北京都替换成华北区</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+            </div>
+
+            <div class="feature-category">
+                <h3 class="category-title">📊 统计分析</h3>
+                <div class="feature-example" data-command="统计设备类型的分布">
+                    <span class="feature-example-text">统计设备类型的分布</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="帮我看看设备编码有哪些">
+                    <span class="feature-example-text">帮我看看设备编码有哪些</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="按设备类型分组，计算未税单价的平均值">
+                    <span class="feature-example-text">按设备类型分组，计算未税单价的平均值</span>
+                    <span class="feature-example-hint">⭐️ v0.0.4 新增</span>
+                </div>
+            </div>
+
+            <div class="feature-category">
+                <h3 class="category-title">✏️ 文本处理 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.4</span></h3>
+                <div class="feature-example" data-command="把姓和名合并为全名，用空格连接">
+                    <span class="feature-example-text">把姓和名合并为全名，用空格连接</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="把客户信息列按'-'拆分">
+                    <span class="feature-example-text">把客户信息列按'-'拆分</span>
+                    <span class="feature-example-hint">⭐️ v0.0.4-beta</span>
+                </div>
+                <div class="feature-example" data-command="把产品编码列全部转为大写">
+                    <span class="feature-example-text">把产品编码列全部转为大写</span>
+                    <span class="feature-example-hint">⭐️ v0.0.4-beta</span>
+                </div>
+            </div>
+
+            <div class="feature-category">
+                <h3 class="category-title">📅 日期工具 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.4</span></h3>
+                <div class="feature-example" data-command="从订单日期提取月份">
+                    <span class="feature-example-text">从订单日期提取月份</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="从创建时间提取年份">
+                    <span class="feature-example-text">从创建时间提取年份</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="提取生日的星期几">
+                    <span class="feature-example-text">提取生日的星期几</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+            </div>
+
+            <div class="feature-category">
+                <h3 class="category-title">🏗️ 表格结构 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.4-beta</span></h3>
+                <div class="feature-example" data-command="删除重复行">
+                    <span class="feature-example-text">删除重复行</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="根据客户邮箱列删除重复数据">
+                    <span class="feature-example-text">根据客户邮箱列删除重复数据</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="按销售额列降序排序">
+                    <span class="feature-example-text">按销售额列降序排序</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+                <div class="feature-example" data-command="把表格按日期升序排列">
+                    <span class="feature-example-text">把表格按日期升序排列</span>
+                    <span class="feature-example-hint">点击填充</span>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                💡 提示：点击任一示例自动填入聊天框，记得把列名替换成你表格里的实际列名哦！
             </div>
         </div>
     </div>

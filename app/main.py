@@ -1,5 +1,8 @@
 """
 Merlin - FastAPI主应用
+
+Author: TJxiaobao
+License: MIT
 """
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -134,6 +137,22 @@ async def execute_command(request: ExecuteCommandRequest):
                 execution_log=[translation_result.get("ai_message", "")]
             )
         
+        # ⭐️ v0.1.0: 检查是否是友好提示消息
+        if translation_result.get("is_friendly_message"):
+            return ExecuteCommandResponse(
+                success=True,
+                message=translation_result.get("message"),
+                execution_log=[]
+            )
+        
+        # 检查是否是帮助指令
+        if translation_result.get("is_help"):
+            return ExecuteCommandResponse(
+                success=True,
+                message=translation_result.get("message"),
+                execution_log=[]
+            )
+        
         # 步骤2: 执行工具调用
         execution_log = []
         all_success = True
@@ -170,15 +189,45 @@ async def execute_command(request: ExecuteCommandRequest):
                 result = engine.fill_missing_values(**parameters)
             elif tool_name == "find_and_replace":
                 result = engine.find_and_replace(**parameters)
+            elif tool_name == "concatenate_columns":  # v0.0.4-alpha
+                result = engine.concatenate_columns(**parameters)
+            elif tool_name == "extract_date_part":  # v0.0.4-alpha
+                result = engine.extract_date_part(**parameters)
+            elif tool_name == "group_by_aggregate":  # v0.0.4-alpha
+                result = engine.group_by_aggregate(**parameters)
+            elif tool_name == "split_column":  # v0.0.4-beta
+                result = engine.split_column(**parameters)
+            elif tool_name == "change_case":  # v0.0.4-beta
+                result = engine.change_case(**parameters)
+            elif tool_name == "drop_duplicates":  # v0.0.4-beta
+                result = engine.drop_duplicates(**parameters)
+            elif tool_name == "sort_by_column":  # v0.0.4-beta
+                # 转换 ascending 参数为布尔值（如果存在）
+                if 'ascending' in parameters and isinstance(parameters['ascending'], str):
+                    parameters['ascending'] = parameters['ascending'].lower() in ['true', '1', 'yes']
+                result = engine.sort_by_column(**parameters)
             else:
                 result = {
                     "success": False,
                     "error": f"未知工具: {tool_name}"
                 }
             
+            # 检查是否是分析类工具（不修改表格）
+            if result.get("is_analysis"):
+                # 分析类工具直接返回结果，不保存文件
+                return ExecuteCommandResponse(
+                    success=True,
+                    message=result["message"],
+                    execution_log=[result["message"]]
+                )
+            
             if not result["success"]:
                 all_success = False
-                execution_log.append(f"❌ {result.get('error', '执行失败')}")
+                # ⭐️ v0.1.0: 如果有建议，一起显示
+                error_message = result.get('error', '执行失败')
+                if result.get('suggestion'):
+                    error_message += f"\n\n{result['suggestion']}"
+                execution_log.append(error_message)
             else:
                 execution_log.append(result["message"])
         
