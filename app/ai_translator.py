@@ -11,6 +11,7 @@ import json
 import logging
 
 from .config import config
+from .prompts.manager import get_prompt, get_all_tools, get_tools_by_names
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -109,7 +110,7 @@ class AITranslator:
     
     def get_tools_definition(self, filter_tools: Optional[List[str]] = None) -> List[Dict]:
         """
-        定义可用的工具（Function Calling的schema）
+        获取可用的工具（Function Calling的schema）
         这是告诉AI它可以使用哪些工具
         
         Args:
@@ -118,7 +119,22 @@ class AITranslator:
         注意：为了兼容不同的AI服务（Kimi不支持数组类型定义），
         这里统一使用string类型，AI会自动处理数字
         """
-        all_tools = [
+        # ✅ 从 YAML 加载，代码极度干净！
+        if filter_tools:
+            filtered = get_tools_by_names(filter_tools)
+            logger.info(f"工具过滤：使用 {len(filtered)} 个工具")
+            logger.info(f"当前使用工具: {[t['function']['name'] for t in filtered]}")
+            return filtered
+        
+        all_tools = get_all_tools()
+        logger.info(f"使用所有工具：{len(all_tools)} 个")
+        return all_tools
+    
+    def get_tools_definition_old_hardcoded(self, filter_tools: Optional[List[str]] = None) -> List[Dict]:
+        """
+        【已废弃】原来的硬编码版本，保留作为备份
+        """
+        all_tools_hardcoded = [
             {
                 "type": "function",
                 "function": {
@@ -533,56 +549,8 @@ class AITranslator:
         Returns:
             系统提示词
         """
-        return f"""你是一个Excel操作助手。用户会用自然语言告诉你想对Excel表格做什么修改。
-你的任务是理解用户的意图，然后调用合适的工具来完成操作。
-
-用户的Excel表格有以下列名：
-{', '.join(headers)}
-
-重要规则：
-1. 只能使用上述列表中存在的列名
-2. 如果用户提到的列名不精确（如"价格"），你需要从上述列表中找到最匹配的列名（如"未税单价"）
-
-工具选择规则：
-3. 如果用户说"把某列设为XXX"，使用 set_column_value 工具
-4. 如果用户说"把符合XX条件的某列设为XXX"，使用 set_by_condition 工具
-5. 如果用户说"把A列复制到B列"，使用 copy_column 工具
-6. **如果用户说"把XX的某列设为A，YY的设为B，ZZ的设为C"（多个映射关系），使用 set_by_mapping 工具**
-   - 例如："把设备编码为196001的价格设为10，196002的设为20，196003的设为30"
-   - 应翻译为：set_by_mapping(condition_column="设备编码", target_column="价格", mapping={{"196001": "10", "196002": "20", "196003": "30"}})
-7. **如果用户想要统计、查看、总结某列的数据分布，使用 get_summary 工具**
-   - 例如："统计设备类型的分布"、"帮我看看设备编码有哪些"、"总结一下设备类型"
-   - 应翻译为：get_summary(column="设备类型")
-8. **如果用户想进行数学计算（加减乘除），使用 perform_math 工具**
-   - 例如："让总价等于数量乘以单价"、"计算利润等于售价减成本"、"把未税单价乘以1.13存入含税单价"
-   - 应翻译为：perform_math(target_column="总价", source_column_1="数量", operator="multiply", source_column_2_or_number="单价")
-9. **如果用户要清理空格，使用 trim_whitespace 工具**
-   - 例如："清理设备名称列的空格"、"去掉备注列前后的空格"
-10. **如果用户要填充空值，使用 fill_missing_values 工具**
-   - 例如："把备注列的空白填充为N/A"
-11. **如果用户要查找替换文本，使用 find_and_replace 工具**
-   - 例如："把客户区域列里的北京都替换成华北区"
-12. **如果用户要合并列，使用 concatenate_columns 工具** (v0.0.4新增)
-   - 例如："把姓和名合并为全名，用空格连接"
-13. **如果用户要从日期提取信息，使用 extract_date_part 工具** (v0.0.4新增)
-   - 例如："从订单日期提取月份"
-14. **如果用户要分组统计，使用 group_by_aggregate 工具** (v0.0.4新增)
-   - 例如："按设备类型分组，计算平均价格"
-15. **如果用户要拆分列，使用 split_column 工具** (v0.0.4-beta新增)
-   - 例如："把客户信息列按'-'拆分"、"将全名列按空格拆分为姓和名"
-16. **如果用户要更改大小写，使用 change_case 工具** (v0.0.4-beta新增)
-   - 例如："把产品编码列全部转为大写"、"把姓名列转为首字母大写"
-17. **如果用户要删除重复行，使用 drop_duplicates 工具** (v0.0.4-beta新增)
-   - 例如："删除重复行"、"根据客户邮箱列删除重复数据"
-18. **如果用户要排序，使用 sort_by_column 工具** (v0.0.4-beta新增)
-   - 例如："按销售额列降序排序"、"把表格按日期升序排列"
-
-匹配类型规则：
-19. 当用户说"开头"、"以...开头"时，使用 match_type="startswith"
-20. 当用户说"包含"时，使用 match_type="contains"  
-21. 默认使用 match_type="exact"（精确匹配）
-
-请根据用户的指令调用合适的工具。"""
+        # ✅ 从 YAML 加载，代码干净！
+        return get_prompt('system_prompts.main', headers=', '.join(headers))
     
     def translate(self, user_command: str, headers: List[str]) -> Dict[str, Any]:
         """
@@ -601,43 +569,8 @@ class AITranslator:
             help_keywords = ["帮助", "help", "你能做什么", "有什么功能", "怎么用", "功能列表"]
             if user_command.strip().lower() in help_keywords:
                 logger.info("用户请求帮助信息")
-                help_message = """
-我可以帮你处理 Excel 数据，以下是我的功能：
-
-📝 **数据填充与修改**
-  • 把所有税率设为 0.13
-  • 把设备类型是 Gateway 的价格设为 100
-  • 把设备编码为 196001 的价格设为 100，196002 的设为 200
-
-🧮 **数学计算** ⭐️ v0.0.2 新增
-  • 让总价等于数量乘以单价
-  • 计算利润等于售价减去成本
-  • 把未税单价乘以 1.13 存入含税单价，保留 2 位小数
-
-🧹 **数据清洗** ⭐️ v0.0.2 新增
-  • 清理设备名称列的空格
-  • 把备注列的空白单元格填充为 N/A
-  • 把客户区域列里的北京都替换成华北区
-
-📊 **统计分析**
-  • 统计设备类型的分布
-  • 帮我看看设备编码有哪些
-  • 按设备类型分组，计算平均价格 ⭐️ v0.0.4 新增
-
-✏️ **文本处理** ⭐️ v0.0.4 新增
-  • 把姓和名合并为全名，用空格连接
-  • 把客户信息列按'-'拆分 ⭐️ v0.0.4-beta
-  • 把产品编码列全部转为大写 ⭐️ v0.0.4-beta
-
-📅 **日期工具** ⭐️ v0.0.4 新增
-  • 从订单日期提取月份
-
-🏗️ **表格结构** ⭐️ v0.0.4-beta 新增
-  • 删除重复行
-  • 按销售额列降序排序
-
-💡 **提示**：点击聊天框旁的 ✨ 按钮查看更多示例！
-                """.strip()
+                # ✅ 从 YAML 加载，代码干净！
+                help_message = get_prompt('help_messages.main')
                 
                 return {
                     "success": True,
@@ -673,14 +606,8 @@ class AITranslator:
             # 检查AI是否调用了工具
             if not message.tool_calls:
                 # AI没有调用工具，返回友好提示而不是错误
-                friendly_message = message.content or "🧙‍♂️ 抱歉，我没太理解您的意思。"
-                
-                # 添加友好的引导提示
-                friendly_message += "\n\n💡 **提示**：\n"
-                friendly_message += "• 点击 ✨ 魔法棒按钮查看功能示例\n"
-                friendly_message += "• 输入'帮助'查看完整功能列表\n"
-                friendly_message += "• 确保指令包含列名和操作内容\n"
-                friendly_message += "\n例如：'把设备类型列的所有值改为 Gateway'"
+                # ✅ 从 YAML 加载，代码干净！
+                friendly_message = get_prompt('error_messages.router_failed')
                 
                 logger.info(f"AI未调用工具，返回友好提示")
                 return {

@@ -18,6 +18,7 @@ from .ai_translator import get_translator
 from .schemas import ExecuteCommandRequest, ExecuteCommandResponse, UploadFileResponse
 from .config import config
 from .utils import validate_file_extension
+from .prompts import manager as prompt_manager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,10 +45,19 @@ engines: Dict[str, ExcelEngine] = {}
 
 @app.on_event("startup")
 async def startup_event():
-    """启动时验证配置"""
+    """启动时验证配置并加载提示词"""
     try:
+        # 验证配置
         config.validate()
-        logger.info("配置验证成功")
+        logger.info("✅ 配置验证成功")
+        
+        # 加载提示词
+        prompt_manager.load_prompts()
+        logger.info("✅ Merlin 提示词库加载完成")
+        
+        # 加载工具 Schema
+        prompt_manager.load_tools()
+        logger.info("✅ Merlin 工具 Schema 加载完成")
     except Exception as e:
         logger.error(f"配置验证失败: {e}")
         raise
