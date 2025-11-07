@@ -1,9 +1,10 @@
 /**
- * Merlin Frontend - JavaScript
- * 
+ * Merlin Frontend - Main JavaScript
  * Author: TJxiaobao
  * License: MIT
  */
+
+import './style.css'
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -75,6 +76,7 @@ closeFileBtn.addEventListener('click', () => {
     commandInput.disabled = true;
     commandInput.placeholder = '请先上传Excel文件...';
     sendBtn.disabled = true;
+    magicWandBtn.disabled = true;
     downloadBtn.style.display = 'none';
     messagesContainer.innerHTML = '';
     messagesContainer.appendChild(welcomeMessage);
@@ -86,10 +88,18 @@ sendBtn.addEventListener('click', () => {
     sendCommand();
 });
 
-commandInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !sendBtn.disabled) {
+// 支持 Enter 发送，Shift+Enter 换行
+commandInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !sendBtn.disabled) {
+        e.preventDefault();
         sendCommand();
     }
+});
+
+// 自动调整 textarea 高度
+commandInput.addEventListener('input', () => {
+    commandInput.style.height = 'auto';
+    commandInput.style.height = Math.min(commandInput.scrollHeight, 150) + 'px';
 });
 
 // 下载文件
@@ -304,7 +314,7 @@ function removeLastMessage() {
 }
 
 // 填充示例指令
-function fillExample(text) {
+window.fillExample = function(text) {
     if (!currentFileId) {
         addMessage('assistant', '请先上传Excel文件');
         return;
@@ -363,7 +373,5 @@ document.querySelectorAll('.feature-example').forEach(example => {
 });
 
 // 页面加载完成后检查服务器
-document.addEventListener('DOMContentLoaded', () => {
-    checkServerConnection();
-});
+checkServerConnection();
 

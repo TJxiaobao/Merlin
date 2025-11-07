@@ -1,0 +1,17 @@
+{
+  "name": "merlin-frontend",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Merlin - AI-driven Excel operations with natural language",
+  "author": "TJxiaobao",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
+
