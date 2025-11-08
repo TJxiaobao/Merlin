@@ -9,6 +9,139 @@
 # 注意：为了兼容不同的AI服务（Kimi不支持数组类型定义），
 # 这里统一使用string类型，AI会自动处理数字
 
+# -----------------------------------------------------------------------------
+# 工具分组配置（Tool Groups）- 用于关键词路由优化
+# -----------------------------------------------------------------------------
+tool_groups:
+  filling:
+    keywords:
+      - 设为
+      - 改为
+      - 修改
+      - 复制
+      - 填充
+      - 设置
+      - 全部
+      - 所有
+    tools:
+      - set_column_value
+      - set_by_condition
+      - copy_column
+      - set_by_mapping
+
+  math:
+    keywords:
+      - 计算
+      - 乘以
+      - 除以
+      - 加
+      - 减
+      - 总价
+      - 利润
+      - 等于
+      - 加上
+      - 减去
+      - "×"
+      - "÷"
+      - "+"
+      - "-"
+    tools:
+      - perform_math
+
+  cleaning:
+    keywords:
+      - 清理
+      - 替换
+      - 空格
+      - 空白
+      - 填充为
+      - 查找
+      - 改成
+    tools:
+      - trim_whitespace
+      - fill_missing_values
+      - find_and_replace
+
+  text:
+    keywords:
+      - 合并
+      - 拆分
+      - 连接
+      - 分割
+      - 大写
+      - 小写
+      - 首字母
+      - 按...拆分
+      - 转为大写
+      - 转为小写
+    tools:
+      - concatenate_columns
+      - split_column
+      - change_case
+
+  date:
+    keywords:
+      - 日期
+      - 年份
+      - 月份
+      - 季度
+      - 星期
+      - 提取
+    tools:
+      - extract_date_part
+
+  structure:
+    keywords:
+      - 删除重复
+      - 去重
+      - 排序
+      - 升序
+      - 降序
+      - 从高到低
+      - 从低到高
+    tools:
+      - drop_duplicates
+      - sort_by_column
+
+  analysis:
+    keywords:
+      - 统计
+      - 分布
+      - 总结
+      - 查看
+      - 有哪些
+      - 分析
+      - 汇总
+      - 分组
+      - 聚合
+      - 平均
+      - 求和
+    tools:
+      - get_summary
+      - group_by_aggregate
+
+# -----------------------------------------------------------------------------
+# 总指挥工具（Coordinator Tools）- 用于拆分复合指令
+# -----------------------------------------------------------------------------
+coordinator_tools:
+  - type: function
+    function:
+      name: execute_tasks_in_order
+      description: 将用户的多步骤指令拆分为一个按顺序执行的字符串指令列表
+      parameters:
+        type: object
+        properties:
+          tasks:
+            type: array
+            items:
+              type: string
+            description: 包含用户所有独立指令的字符串列表。例如 ["指令A", "指令B"]
+        required:
+          - tasks
+
+# -----------------------------------------------------------------------------
+# Excel 操作工具（Excel Operation Tools）
+# -----------------------------------------------------------------------------
 tools:
   - type: function
     function:

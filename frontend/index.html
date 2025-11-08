@@ -3,86 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧙 Merlin - AI表格填充助手</title>
+    <title>🧙 Merlin - AI Excel 助手</title>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🧙 Merlin</h1>
-            <p>AI表格填充助手 - 用自然语言操作Excel</p>
+    <!-- 顶部栏 -->
+    <div class="topbar">
+        <div class="topbar-content">
+            <div class="topbar-logo">
+                <span class="logo-icon">🧙</span>
+                <span class="logo-text">Merlin</span>
+            </div>
+            <div class="topbar-subtitle">AI Excel 助手 - 用自然语言操作表格</div>
         </div>
+    </div>
 
-        <div class="main-card">
-            <!-- 左侧边栏 -->
-            <div class="sidebar">
-                <!-- 文件上传区 -->
-                <div class="file-upload-section">
-                    <div class="file-upload-area" id="dropZone">
-                        <div class="upload-icon">📁</div>
-                        <div class="upload-text">点击或拖拽上传</div>
-                        <div class="upload-hint">支持 .xlsx 格式</div>
-                        <input type="file" id="fileInput" accept=".xlsx">
+    <!-- 主容器 -->
+    <div class="main-container">
+        <!-- 左侧栏：上下文面板 -->
+        <div class="sidebar">
+            <!-- 区域 1: 文件操作 -->
+            <div class="sidebar-section file-section">
+                <div class="section-title">📁 文件</div>
+                
+                <!-- 未上传状态 -->
+                <div class="file-upload-area" id="dropZone">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">点击或拖拽上传</div>
+                    <div class="upload-hint">支持 .xlsx 格式</div>
+                    <input type="file" id="fileInput" accept=".xlsx">
+                </div>
+
+                <!-- 已上传状态 -->
+                <div class="file-info-card" id="fileInfoCard" style="display: none;">
+                    <div class="file-name" id="fileName"></div>
+                    <div class="file-stats">
+                        <span id="totalRows">0</span> 行 × <span id="totalColumns">0</span> 列
                     </div>
-
-                    <!-- 文件信息卡片 -->
-                    <div class="file-info" id="fileInfo">
-                        <div class="file-info-header">
-                            <div class="file-info-title" id="fileName"></div>
-                            <button class="file-info-close" id="closeFile">×</button>
-                        </div>
-                        <div class="file-info-stats">
-                            📊 <strong>总行数:</strong> <span id="totalRows"></span><br>
-                            📋 <strong>总列数:</strong> <span id="totalColumns"></span>
-                        </div>
-                        <div class="columns-section">
-                            <div class="columns-section-title">📝 列名列表:</div>
-                            <div class="columns-list" id="columnsList"></div>
-                        </div>
+                    <div class="file-actions">
+                        <button class="file-action-btn" id="downloadOriginalBtn" title="下载原始文件">
+                            📥 下载原始
+                        </button>
+                        <button class="file-action-btn" id="uploadNewBtn" title="上传新文件">
+                            🔄 上传新文件
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- 右侧聊天区域 -->
-            <div class="chat-section">
-                <div class="messages-container" id="messagesContainer">
-                    <div class="welcome-message" id="welcomeMessage">
-                        <h2>👋 欢迎使用 Merlin</h2>
-                        <p>请先上传一个 Excel 文件，然后用自然语言告诉我你想做什么</p>
-                        
-                        <div class="welcome-examples">
-                            <h3>💡 示例指令：</h3>
-                            <div class="example" onclick="fillExample('把所有税率设为0.13')">
-                                "把所有税率设为0.13"
-                            </div>
-                            <div class="example" onclick="fillExample('把Gateway的价格设为100')">
-                                "把Gateway的价格设为100"
-                            </div>
-                            <div class="example" onclick="fillExample('统计设备类型的分布')">
-                                "统计设备类型的分布" ⭐️ 新增
-                            </div>
-                        </div>
+            <!-- 区域 2: 列名列表 (可复制) -->
+            <div class="sidebar-section columns-section" id="columnsSection" style="display: none;">
+                <div class="section-title">
+                    📝 列名 (<span id="columnCount">0</span>)
+                </div>
+                <div class="columns-list-scrollable" id="columnsList">
+                    <!-- 动态生成列名列表 -->
+                </div>
+            </div>
+
+            <!-- 区域 3: 操作历史 (未来功能) -->
+            <div class="sidebar-section history-section" style="display: none;">
+                <div class="section-title">📜 操作历史</div>
+                <div class="history-placeholder">
+                    即将推出
+                </div>
+            </div>
+        </div>
+
+        <!-- 主聊天区：交互面板 -->
+        <div class="chat-panel">
+            <!-- 聊天消息容器 -->
+            <div class="messages-container" id="messagesContainer">
+                <!-- 空状态提示 -->
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-state-icon">🧙</div>
+                    <h2 class="empty-state-title">你好，我是 Merlin</h2>
+                    <p class="empty-state-text" id="emptyStateText">
+                        请先上传一个 Excel 文件，然后用自然语言告诉我你想做什么
+                    </p>
+                    <div class="empty-state-suggestions" id="emptyStateSuggestions" style="display: none;">
+                        <p class="suggestions-intro">我已读完你的文件。你可以试试这样说：</p>
+                        <button class="suggestion-btn" onclick="fillExample('把所有税率设为 0.13')">
+                            "把所有税率设为 0.13"
+                        </button>
+                        <button class="suggestion-btn" onclick="fillExample('统计设备类型的分布')">
+                            "统计设备类型的分布"
+                        </button>
+                        <button class="suggestion-btn" onclick="fillExample('计算总价等于数量乘以单价')">
+                            "计算总价等于数量乘以单价"
+                        </button>
+                        <p class="suggestions-footer">
+                            或者，点击 <strong>✨</strong> 按钮查看所有功能
+                        </p>
                     </div>
                 </div>
+            </div>
 
-                <!-- 输入区域 -->
-                <div class="input-section">
-                    <div class="input-container">
-                        <button class="magic-wand-btn" id="magicWandBtn" disabled title="查看功能示例">✨</button>
-                        <textarea 
-                            id="commandInput" 
-                            placeholder="请先上传Excel文件..." 
-                            rows="1"
-                            disabled
-                        ></textarea>
-                        <button class="btn btn-primary" id="sendBtn" disabled>
-                            <span id="sendBtnText">发送</span>
-                        </button>
-                    </div>
-                    <div class="action-buttons" id="actionButtons" style="display: none;">
-                        <button class="download-btn" id="downloadBtn" style="display: none;">
-                            📥 下载修改后的文件
-                        </button>
-                    </div>
+            <!-- 输入栏（固定在底部） -->
+            <div class="chat-input-bar">
+                <div class="input-wrapper">
+                    <button class="magic-wand-btn" id="magicWandBtn" disabled title="查看所有功能">
+                        ✨
+                    </button>
+                    <textarea 
+                        id="commandInput" 
+                        placeholder="请先上传Excel文件..." 
+                        rows="1"
+                        disabled
+                    ></textarea>
+                    <button class="send-btn" id="sendBtn" disabled>
+                        <span id="sendBtnText">发送</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -113,7 +143,7 @@
             </div>
 
             <div class="feature-category">
-                <h3 class="category-title">🧮 数学计算 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.2</span></h3>
+                <h3 class="category-title">🧮 数学计算</h3>
                 <div class="feature-example" data-command="让总价等于数量乘以单价">
                     <span class="feature-example-text">让总价等于数量乘以单价</span>
                     <span class="feature-example-hint">点击填充</span>
@@ -129,7 +159,7 @@
             </div>
 
             <div class="feature-category">
-                <h3 class="category-title">🧹 数据清洗 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.2</span></h3>
+                <h3 class="category-title">🧹 数据清洗</h3>
                 <div class="feature-example" data-command="清理设备名称列的空格">
                     <span class="feature-example-text">清理设备名称列的空格</span>
                     <span class="feature-example-hint">点击填充</span>
@@ -156,58 +186,30 @@
                 </div>
                 <div class="feature-example" data-command="按设备类型分组，计算未税单价的平均值">
                     <span class="feature-example-text">按设备类型分组，计算未税单价的平均值</span>
-                    <span class="feature-example-hint">⭐️ v0.0.4 新增</span>
+                    <span class="feature-example-hint">点击填充</span>
                 </div>
             </div>
 
             <div class="feature-category">
-                <h3 class="category-title">✏️ 文本处理 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.4</span></h3>
+                <h3 class="category-title">✏️ 文本处理</h3>
                 <div class="feature-example" data-command="把姓和名合并为全名，用空格连接">
                     <span class="feature-example-text">把姓和名合并为全名，用空格连接</span>
                     <span class="feature-example-hint">点击填充</span>
                 </div>
-                <div class="feature-example" data-command="把客户信息列按'-'拆分">
-                    <span class="feature-example-text">把客户信息列按'-'拆分</span>
-                    <span class="feature-example-hint">⭐️ v0.0.4-beta</span>
-                </div>
                 <div class="feature-example" data-command="把产品编码列全部转为大写">
                     <span class="feature-example-text">把产品编码列全部转为大写</span>
-                    <span class="feature-example-hint">⭐️ v0.0.4-beta</span>
-                </div>
-            </div>
-
-            <div class="feature-category">
-                <h3 class="category-title">📅 日期工具 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.4</span></h3>
-                <div class="feature-example" data-command="从订单日期提取月份">
-                    <span class="feature-example-text">从订单日期提取月份</span>
-                    <span class="feature-example-hint">点击填充</span>
-                </div>
-                <div class="feature-example" data-command="从创建时间提取年份">
-                    <span class="feature-example-text">从创建时间提取年份</span>
-                    <span class="feature-example-hint">点击填充</span>
-                </div>
-                <div class="feature-example" data-command="提取生日的星期几">
-                    <span class="feature-example-text">提取生日的星期几</span>
                     <span class="feature-example-hint">点击填充</span>
                 </div>
             </div>
 
             <div class="feature-category">
-                <h3 class="category-title">🏗️ 表格结构 <span style="color: #f56565; font-size: 0.8em;">⭐️ v0.0.4-beta</span></h3>
+                <h3 class="category-title">🏗️ 表格结构</h3>
                 <div class="feature-example" data-command="删除重复行">
                     <span class="feature-example-text">删除重复行</span>
                     <span class="feature-example-hint">点击填充</span>
                 </div>
-                <div class="feature-example" data-command="根据客户邮箱列删除重复数据">
-                    <span class="feature-example-text">根据客户邮箱列删除重复数据</span>
-                    <span class="feature-example-hint">点击填充</span>
-                </div>
                 <div class="feature-example" data-command="按销售额列降序排序">
                     <span class="feature-example-text">按销售额列降序排序</span>
-                    <span class="feature-example-hint">点击填充</span>
-                </div>
-                <div class="feature-example" data-command="把表格按日期升序排列">
-                    <span class="feature-example-text">把表格按日期升序排列</span>
                     <span class="feature-example-hint">点击填充</span>
                 </div>
             </div>
@@ -221,4 +223,3 @@
     <script type="module" src="/main.js"></script>
 </body>
 </html>
-

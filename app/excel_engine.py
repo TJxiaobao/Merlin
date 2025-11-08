@@ -1055,6 +1055,67 @@ class ExcelEngine:
         self.df = self.original_df.copy()
         self.execution_log = []
         logger.info("已重置到原始状态")
+    
+    def execute_tool(self, tool_name: str, parameters: Dict) -> Dict:
+        """
+        统一的工具执行接口（供 WebSocket 使用）
+        Args:
+            tool_name: 工具名称
+            parameters: 工具参数
+        Returns:
+            执行结果
+        """
+        # 转换参数类型
+        if tool_name == "get_summary" and 'top_n' in parameters:
+            if isinstance(parameters['top_n'], str):
+                parameters['top_n'] = int(parameters['top_n'])
+        
+        if tool_name == "perform_math" and 'round_to' in parameters:
+            if parameters['round_to']:
+                parameters['round_to'] = int(parameters['round_to'])
+        
+        if tool_name == "sort_by_column" and 'ascending' in parameters:
+            if isinstance(parameters['ascending'], str):
+                parameters['ascending'] = parameters['ascending'].lower() in ['true', '1', 'yes']
+        
+        # 调用对应的方法
+        if tool_name == "set_column_value":
+            return self.set_column_value(**parameters)
+        elif tool_name == "set_by_condition":
+            return self.set_by_condition(**parameters)
+        elif tool_name == "copy_column":
+            return self.copy_column(**parameters)
+        elif tool_name == "set_by_mapping":
+            return self.set_by_mapping(**parameters)
+        elif tool_name == "get_summary":
+            return self.get_summary(**parameters)
+        elif tool_name == "perform_math":
+            return self.perform_math(**parameters)
+        elif tool_name == "trim_whitespace":
+            return self.trim_whitespace(**parameters)
+        elif tool_name == "fill_missing_values":
+            return self.fill_missing_values(**parameters)
+        elif tool_name == "find_and_replace":
+            return self.find_and_replace(**parameters)
+        elif tool_name == "concatenate_columns":
+            return self.concatenate_columns(**parameters)
+        elif tool_name == "extract_date_part":
+            return self.extract_date_part(**parameters)
+        elif tool_name == "group_by_aggregate":
+            return self.group_by_aggregate(**parameters)
+        elif tool_name == "split_column":
+            return self.split_column(**parameters)
+        elif tool_name == "change_case":
+            return self.change_case(**parameters)
+        elif tool_name == "drop_duplicates":
+            return self.drop_duplicates(**parameters)
+        elif tool_name == "sort_by_column":
+            return self.sort_by_column(**parameters)
+        else:
+            return {
+                "success": False,
+                "error": f"未知工具: {tool_name}"
+            }
 
 
 # 工具函数映射 - 供AI调用

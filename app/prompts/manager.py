@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # 全局提示词缓存
 _prompts: Dict[str, Any] = {}
 _tools: List[Dict[str, Any]] = []
+_tool_groups: Dict[str, Any] = {}
 _is_loaded = False
 _tools_loaded = False
 
@@ -148,7 +149,7 @@ def load_tools(config_path: str = "app/prompts/tools_schema.yml") -> None:
         FileNotFoundError: 配置文件不存在
         yaml.YAMLError: YAML 格式错误
     """
-    global _tools, _tools_loaded
+    global _tools, _tool_groups, _tools_loaded
     
     if _tools_loaded:
         logger.info("工具 Schema 已加载，跳过重复加载")
@@ -161,10 +162,20 @@ def load_tools(config_path: str = "app/prompts/tools_schema.yml") -> None:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
         
-        _tools = config.get('tools', [])
+        # 加载工具分组配置
+        _tool_groups = config.get('tool_groups', {})
+        
+        # 合并 coordinator_tools 和 tools
+        coordinator_tools = config.get('coordinator_tools', [])
+        excel_tools = config.get('tools', [])
+        _tools = coordinator_tools + excel_tools
+        
         _tools_loaded = True
         logger.info(f"✅ Merlin 工具 Schema 加载成功: {config_path}")
-        logger.info(f"   - 工具数量: {len(_tools)} 个")
+        logger.info(f"   - 工具分组: {len(_tool_groups)} 个")
+        logger.info(f"   - 总指挥工具: {len(coordinator_tools)} 个")
+        logger.info(f"   - Excel 工具: {len(excel_tools)} 个")
+        logger.info(f"   - 总计: {len(_tools)} 个")
         
     except yaml.YAMLError as e:
         raise yaml.YAMLError(f"❌ YAML 格式错误: {e}")
@@ -220,4 +231,17 @@ def is_tools_loaded() -> bool:
         True 如果已加载，否则 False
     """
     return _tools_loaded
+
+
+def get_tool_groups() -> Dict[str, Any]:
+    """
+    获取工具分组配置
+    
+    Returns:
+        工具分组配置字典
+    """
+    if not _tools_loaded:
+        raise RuntimeError("❌ 工具 Schema 尚未加载，请先调用 load_tools()")
+    
+    return _tool_groups.copy()
 

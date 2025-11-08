@@ -64,7 +64,7 @@ fi
 
 # 清理可能存在的旧进程
 echo "🧹 清理旧进程..."
-pkill -9 -f "uvicorn app.main:app" 2>/dev/null
+pkill -9 -f "uvicorn app" 2>/dev/null
 pkill -9 -f "vite" 2>/dev/null
 
 # 清理占用端口的进程
@@ -86,11 +86,11 @@ sleep 1
 echo "   ✅ 清理完成"
 
 echo ""
-echo "1️⃣ 启动后端服务..."
+echo "1️⃣ 启动后端服务（WebSocket 流式响应）..."
 source .venv/bin/activate
 
-# 在后台启动后端
-nohup python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
+# ⭐️ 在后台启动后端（使用 asgi:application 整合 Socket.IO）
+nohup python -m uvicorn app.asgi:application --reload --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
 BACKEND_PID=$!
 
 echo "   ✅ 后端服务已启动 (PID: $BACKEND_PID)"
@@ -138,19 +138,19 @@ echo "   或: kill $BACKEND_PID $FRONTEND_PID"
 echo "================================"
 echo ""
 
-# 自动打开浏览器
-echo "🌐 正在打开浏览器..."
-sleep 2
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    open http://localhost:5173
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Linux
-    xdg-open http://localhost:5173
-else
-    # Windows (Git Bash)
-    start http://localhost:5173
-fi
+# 自动打开浏览器（如果不会自动跳转可以取消注释）
+#echo "🌐 正在打开浏览器..."
+#sleep 2
+#if [[ "$OSTYPE" == "darwin"* ]]; then
+#    # macOS
+#    open http://localhost:5173
+#elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+#    # Linux
+#    xdg-open http://localhost:5173
+#else
+#    # Windows (Git Bash)
+#    start http://localhost:5173
+#fi
 
 echo ""
 echo "✅ 启动完成！浏览器应该已自动打开"
