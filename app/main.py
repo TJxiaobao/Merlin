@@ -19,6 +19,7 @@ from .schemas import ExecuteCommandRequest, ExecuteCommandResponse, UploadFileRe
 from .config import config
 from .utils import validate_file_extension
 from .prompts import manager as prompt_manager
+from .session_manager import SessionManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ app.add_middleware(
 
 # 全局存储：文件ID -> ExcelEngine实例
 engines: Dict[str, ExcelEngine] = {}
+
+# 全局单例：会话管理器
+session_manager = SessionManager()
 
 
 @app.on_event("startup")
@@ -136,11 +140,15 @@ async def execute_command(request: ExecuteCommandRequest):
         
         logger.info(f"收到指令: {request.command}")
         
-        # 步骤1: 使用AI翻译指令（现在返回列表）
+        # 步骤0: 获取历史上下文
+        current_history = session_manager.get_history(request.file_id)
+        
+        # 步骤1: 使用AI翻译指令（现在返回列表，并传入历史）
         translator = get_translator()
         translation_results = translator.translate(
             user_command=request.command,
-            headers=engine.get_headers()
+            headers=engine.get_headers(),
+            history=current_history
         )
         
         logger.info(f"收到 {len(translation_results)} 个翻译结果")
@@ -307,7 +315,19 @@ async def execute_command(request: ExecuteCommandRequest):
                     error="请查看日志了解详情"
                 )
         
-        # 全部成功
+        # 全部成功：保存历史
+        if last_successful_task_idx > 0:
+            # 构造成功日志摘要
+            success_logs = [log for log in execution_log if "✅" in log or "成功" in log]
+            assistant_summary = " ".join(success_logs) if success_logs else "操作成功完成"
+            
+            # 更新会话历史
+            session_manager.update_history(
+                file_id=request.file_id,
+                user_msg=request.command,
+                assistant_msg=assistant_summary
+            )
+        
         return ExecuteCommandResponse(
             success=True,
             message="指令执行成功！",

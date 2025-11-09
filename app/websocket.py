@@ -1,6 +1,6 @@
 """
 Merlin WebSocket 实时推送
-流式响应架构 - 方案 B
+流式响应架构
 
 Author: TJxiaobao
 License: MIT
@@ -64,7 +64,7 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
     from .excel_engine import ExcelEngine
     from .ai_translator import get_translator
     from .config import config
-    from app.main import engines
+    from app.main import engines, session_manager
     
     try:
         # 步骤 0：开始
@@ -84,6 +84,9 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
         
         engine = engines[file_id]
         
+        # 步骤 0.5：获取历史上下文
+        current_history = session_manager.get_history(file_id)
+        
         # 步骤 1：AI 翻译（实时推送）
         await sio.emit('progress', {
             'type': 'translating',
@@ -97,7 +100,8 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
         try:
             tasks = translator.translate(
                 user_command=command,
-                headers=engine.get_headers()
+                headers=engine.get_headers(),
+                history=current_history
             )
         except Exception as e:
             error_str = str(e)
@@ -159,7 +163,7 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                     'total_tasks': total_tasks
                 }, room=sid)
                 
-                result = translator.translate_single_task(task, engine.get_headers())
+                result = translator.translate_single_task(task, engine.get_headers(), history=current_history)
                 translation_results.append(result)
                 
                 # ⭐️ 立即显示翻译结果
@@ -363,7 +367,20 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                 engine.save(str(final_output_path))
                 logger.info(f"✅ 直接保存当前状态为最终文件")
         
-        # 步骤 4：完成
+        # 步骤 4：保存历史
+        if last_successful_task_idx > 0:
+            # 构造成功日志摘要
+            success_logs = [log for log in execution_log if "✅" in log or "成功" in log]
+            assistant_summary = " ".join(success_logs) if success_logs else "操作成功完成"
+            
+            # 更新会话历史
+            session_manager.update_history(
+                file_id=file_id,
+                user_msg=command,
+                assistant_msg=assistant_summary
+            )
+        
+        # 步骤 5：完成
         success_message = '🎉 所有任务已完成！' if all_success else f'⚠️ 部分任务执行失败'
         if not all_success and last_successful_task_idx > 0:
             success_message += f'（前 {last_successful_task_idx} 个任务已完成）'

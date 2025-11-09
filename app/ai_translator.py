@@ -12,10 +12,15 @@ import json
 import logging
 
 from .config import config
-from .prompts.manager import get_prompt, get_all_tools, get_tools_by_names, get_tool_groups
+from .prompts.manager import get_prompt, get_all_tools, get_tools_by_names, get_tool_groups, get_routing_config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class AIUnderstandingError(Exception):
+    """AI 理解失败异常 - 用于触发上下文重试机制"""
+    pass
 
 
 class AITranslator:
@@ -137,33 +142,56 @@ class AITranslator:
         Returns:
             True 如果是复合指令，False 如果是简单指令
         """
-        # 过滤条件：包含分隔符、连接词、换行符
-        complex_indicators = [
-            '，', '、', '；',  # 中文分隔符
-            ',', ';',  # 英文分隔符
-            '然后', '再', '接着', '同时', '并且', '以及',  # 连接词
-            '\n'  # 换行符
-        ]
+        # 从 YAML 加载复合指令标记
+        routing_config = get_routing_config()
+        complex_markers = routing_config.get('complex_markers', [])
         
-        for indicator in complex_indicators:
-            if indicator in command:
-                logger.info(f"检测到复合指令特征: '{indicator}'")
+        command_lower = command.lower()
+        
+        for marker in complex_markers:
+            if marker.lower() in command_lower:
+                logger.info(f"🔍 检测到复合指令标记: '{marker}'")
                 return True
         
         # 简单指令（长度 < 50 且没有特征）
         if len(command) < 50:
-            logger.info("指令较短且无复合特征，判定为简单指令")
+            logger.info("✅ 指令较短且无复合特征，判定为简单指令")
             return False
         
-        logger.info("指令较长，走总指挥路径以确保准确")
+        logger.info("⚠️  指令较长，走总指挥路径以确保准确")
         return True
     
-    def _call_coordinator(self, command: str) -> Optional[List[str]]:
+    def _is_contextual_command(self, command: str) -> bool:
+        """
+        智能判断是否是依赖上下文的指令（包含代词等）
+        
+        Args:
+            command: 用户输入的指令
+        
+        Returns:
+            True 如果依赖上下文，False 如果不依赖
+        """
+        # 从 YAML 加载上下文依赖标记
+        routing_config = get_routing_config()
+        contextual_markers = routing_config.get('contextual_markers', [])
+        
+        command_lower = command.lower()
+        
+        for marker in contextual_markers:
+            if marker.lower() in command_lower:
+                logger.info(f"🔍 检测到上下文依赖标记: '{marker}'")
+                return True
+        
+        logger.info("✅ 未检测到上下文依赖特征")
+        return False
+    
+    def _call_coordinator(self, command: str, history: List[Dict[str, str]] = None) -> Optional[List[str]]:
         """
         调用总指挥 AI 拆分复合指令
         
         Args:
             command: 用户的复合指令
+            history: 历史对话记录（可选）
         
         Returns:
             拆分后的指令列表，如果拆分失败返回 None
@@ -175,13 +203,26 @@ class AITranslator:
             coordinator_prompt = get_prompt('system_prompts.coordinator')
             coordinator_tools = get_tools_by_names(['execute_tasks_in_order'])
             
+            # 构造消息列表（可能包含历史）
+            messages = [{"role": "system", "content": coordinator_prompt}]
+            
+            if history:
+                logger.info(f"📚 注入历史上下文，共 {len(history)} 条消息")
+                messages.extend(history)
+            
+            messages.append({"role": "user", "content": command})
+            
+            # 输出完整的 AI 请求日志
+            logger.info("=" * 60)
+            logger.info("📤 AI 请求 (Coordinator)")
+            logger.info(f"Model: {self.model}")
+            logger.info(f"Messages: {json.dumps(messages, ensure_ascii=False, indent=2)}")
+            logger.info("=" * 60)
+            
             # 调用 AI
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": coordinator_prompt},
-                    {"role": "user", "content": command}
-                ],
+                messages=messages,
                 tools=coordinator_tools,
                 tool_choice={
                     "type": "function",
@@ -190,6 +231,17 @@ class AITranslator:
             )
 
             message = response.choices[0].message
+            
+            # 输出 AI 响应日志
+            logger.info("=" * 60)
+            logger.info("📥 AI 响应 (Coordinator)")
+            logger.info(f"Finish Reason: {response.choices[0].finish_reason}")
+            logger.info(f"Has Tool Calls: {bool(message.tool_calls)}")
+            if message.tool_calls:
+                for tc in message.tool_calls:
+                    logger.info(f"Tool: {tc.function.name}")
+                    logger.info(f"Arguments: {tc.function.arguments}")
+            logger.info("=" * 60)
             
             # 检查是否调用了工具
             if not message.tool_calls:
@@ -219,13 +271,13 @@ class AITranslator:
             logger.error(f"总指挥调用失败: {e}")
             return None
     
-    def translate_single_task(self, user_command: str, headers: List[str]) -> Dict[str, Any]:
+    def translate_single_task(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         公开方法：翻译单个任务（供WebSocket调用）
         """
-        return self._translate_single_task(user_command, headers)
+        return self._translate_single_task(user_command, headers, history)
     
-    def _translate_single_task(self, user_command: str, headers: List[str]) -> Dict[str, Any]:
+    def _translate_single_task(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         翻译单个任务为工具调用（内部方法）
         
@@ -265,18 +317,45 @@ class AITranslator:
                 tools = self.get_tools_definition()
                 logger.info("未命中关键词，使用全量工具")
             
+            # 构造消息列表（可能包含历史）
+            messages = [{"role": "system", "content": self.build_system_prompt(headers)}]
+            
+            if history:
+                logger.info(f"📚 注入历史上下文，共 {len(history)} 条消息")
+                messages.extend(history)
+            
+            messages.append({"role": "user", "content": user_command})
+            
+            # 输出完整的 AI 请求日志
+            logger.info("=" * 60)
+            logger.info("📤 AI 请求 (Single Task)")
+            logger.info(f"Model: {self.model}")
+            logger.info(f"Messages: {json.dumps(messages, ensure_ascii=False, indent=2)}")
+            logger.info(f"Tools Count: {len(tools)}")
+            logger.info("=" * 60)
+            
             # 调用AI
             response = self.client.chat.completions.create(
                 model=self.model,  # 根据API自动选择模型
-                messages=[
-                    {"role": "system", "content": self.build_system_prompt(headers)},
-                    {"role": "user", "content": user_command}
-                ],
+                messages=messages,
                 tools=tools,
                 tool_choice="auto"  # 让AI自动决用是否使用工具
             )
             
             message = response.choices[0].message
+            
+            # 输出 AI 响应日志
+            logger.info("=" * 60)
+            logger.info("📥 AI 响应 (Single Task)")
+            logger.info(f"Finish Reason: {response.choices[0].finish_reason}")
+            logger.info(f"Has Tool Calls: {bool(message.tool_calls)}")
+            if message.tool_calls:
+                for tc in message.tool_calls:
+                    logger.info(f"Tool: {tc.function.name}")
+                    logger.info(f"Arguments: {tc.function.arguments}")
+            if message.content:
+                logger.info(f"Content: {message.content}")
+            logger.info("=" * 60)
             
             # 检查AI是否调用了工具
             if not message.tool_calls:
@@ -318,18 +397,20 @@ class AITranslator:
                 "error": error_msg
             }
     
-    def translate(self, user_command: str, headers: List[str]) -> List[Dict[str, Any]]:
+    def translate(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> List[Dict[str, Any]]:
         """
         【新】主入口：翻译用户指令为工具调用列表
         
-        实现三阶段 AI 架构 + 智能分流：
-        1. 智能判断：是简单指令还是复合指令？
-        2. 简单指令：直接走快速路径（_translate_single_task）
-        3. 复合指令：走总指挥路径（拆分 → 循环翻译）
+        实现三阶段 AI 架构 + 智能分流 + 上下文感知路由：
+        1. 智能判断：是简单指令还是复合指令？是否依赖上下文？
+        2. 简单指令 + 无上下文依赖：直接走快速路径（_translate_single_task，无history）
+        3. 简单指令 + 有上下文依赖：走快速路径但带上 history
+        4. 复合指令：走总指挥路径（拆分 → 循环翻译）
         
         Args:
             user_command: 用户的自然语言指令（可能是单一或复合指令）
             headers: 表格的列名列表
+            history: 历史对话记录（可选）
         
         Returns:
             指令列表，每个元素是一个 Dict，包含 success、tool_calls 等
@@ -341,25 +422,36 @@ class AITranslator:
             # 第一步：智能判断是否是复合指令
             is_complex = self._is_complex_command(user_command)
             
-            if not is_complex:
-                # 快速路径：简单指令，直接翻译
-                logger.info("🚀 单一指令，直接翻译")
-                result = self._translate_single_task(user_command, headers)
+            # 第二步：智能判断是否依赖上下文
+            is_contextual = self._is_contextual_command(user_command)
+            
+            # 第三步：决策路由
+            if not is_complex and not is_contextual:
+                # 【路径 A】真·简单指令（无上下文依赖）
+                logger.info("🚀 【路径 A】简单指令 + 无上下文，直接翻译（不带 history）")
+                result = self._translate_single_task(user_command, headers, history=None)
                 return [result]
             
-            # 复合路径：调用总指挥拆分
-            logger.info("🎯 复合指令，调用总指挥拆分")
-            tasks = self._call_coordinator(user_command)
-            
-            if not tasks or len(tasks) == 1:
-                # 总指挥拆分失败或只有一个任务，降级到快速路径
-                logger.info("降级为单一指令处理")
-                result = self._translate_single_task(user_command, headers)
+            elif not is_complex and is_contextual:
+                # 【路径 B】简单但依赖上下文的指令（如"把它们改为0.1"）
+                logger.info("🧠 【路径 B】简单指令 + 依赖上下文，直接翻译（带 history）")
+                result = self._translate_single_task(user_command, headers, history=history)
                 return [result]
             
-            # ⭐️ 返回子任务列表，让上层（WebSocket）控制翻译节奏和实时显示
-            logger.info(f"🔄 已拆分为 {len(tasks)} 个子任务")
-            return tasks  # 返回任务列表，而不是翻译结果
+            else:
+                # 【路径 C】复合指令，走总指挥路径
+                logger.info("🎯 【路径 C】复合指令，调用总指挥拆分")
+                tasks = self._call_coordinator(user_command, history=history)
+                
+                if not tasks or len(tasks) == 1:
+                    # 总指挥拆分失败或只有一个任务，降级到路径 B
+                    logger.info("降级为单一指令处理（带 history）")
+                    result = self._translate_single_task(user_command, headers, history=history)
+                    return [result]
+                
+                # ⭐️ 返回子任务列表，让上层（WebSocket）控制翻译节奏和实时显示
+                logger.info(f"🔄 已拆分为 {len(tasks)} 个子任务")
+                return tasks  # 返回任务列表，而不是翻译结果
             
         except Exception as e:
             error_str = str(e)

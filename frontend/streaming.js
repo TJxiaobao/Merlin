@@ -11,12 +11,18 @@ let streamingContent = [];
  * 开始一个新的流式消息
  */
 export function startStreamingMessage() {
+    // ⭐️ 重要：每次开始新消息前，先清理旧的流式消息
+    if (currentStreamingMessage) {
+        finishStreamingMessage(false);  // 完成旧消息（不显示下载按钮）
+    }
+    
     streamingContent = [];
     
-    // 创建消息容器
+    // 创建消息容器（使用时间戳确保 ID 唯一）
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message assistant streaming';
-    messageDiv.id = 'streaming-message';
+    const uniqueId = `streaming-message-${Date.now()}`;
+    messageDiv.id = uniqueId;
     
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
@@ -24,7 +30,7 @@ export function startStreamingMessage() {
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    contentDiv.id = 'streaming-content';
+    contentDiv.id = `streaming-content-${Date.now()}`;
     
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
@@ -42,7 +48,8 @@ export function updateStreamingMessage(newLine, options = {}) {
         return;
     }
     
-    const contentDiv = document.getElementById('streaming-content');
+    // ⭐️ 使用当前消息的 contentDiv（通过 querySelector 而不是固定 ID）
+    const contentDiv = currentStreamingMessage.querySelector('.message-content');
     if (!contentDiv) return;
     
     const { type = 'info', replace = false, showProgress = false, progress = null } = options;
@@ -86,8 +93,13 @@ export function finishStreamingMessage(showDownload = false) {
         return;
     }
     
-    const contentDiv = document.getElementById('streaming-content');
-    if (!contentDiv) return;
+    // ⭐️ 使用当前消息的 contentDiv（通过 querySelector 而不是固定 ID）
+    const contentDiv = currentStreamingMessage.querySelector('.message-content');
+    if (!contentDiv) {
+        currentStreamingMessage = null;
+        streamingContent = [];
+        return;
+    }
     
     // 移除 streaming 类（不再更新）
     currentStreamingMessage.classList.remove('streaming');
@@ -103,6 +115,7 @@ export function finishStreamingMessage(showDownload = false) {
         contentDiv.appendChild(downloadBtn);
     }
     
+    // ⭐️ 清空引用，为下一次消息做准备
     currentStreamingMessage = null;
     streamingContent = [];
 }

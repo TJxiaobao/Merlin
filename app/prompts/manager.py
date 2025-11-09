@@ -245,3 +245,19 @@ def get_tool_groups() -> Dict[str, Any]:
     
     return _tool_groups.copy()
 
+
+def get_routing_config() -> Dict[str, Any]:
+    """
+    获取智能路由配置（complex_markers 和 contextual_markers）
+    
+    Returns:
+        路由配置字典
+    """
+    if not _is_loaded:
+        raise RuntimeError("❌ 提示词尚未加载，请先调用 load_prompts()")
+    
+    return _prompts.get('intelligent_routing', {
+        'complex_markers': [],
+        'contextual_markers': []
+    })
+
