@@ -28,11 +28,12 @@ df.to_excel('output.xlsx', index=False)
 ```
 
 **Merlin 方案**：
+
+AI 只需输出轻量的 JSON 指令（~20 Token）
 ```json
-// AI 只需输出轻量的 JSON 指令（~20 Token）
 {
   "function": "perform_math",
-  "arguments": {"operation": "multiply", ...}
+  "arguments": {"operation": "multiply", "...": "...."}
 }
 ```
 
