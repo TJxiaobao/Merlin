@@ -4,6 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
+[![Docker Compose](https://img.shields.io/badge/docker--compose-supported-blue.svg)](https://docs.docker.com/compose/)
 
 > 让非技术人员通过自然语言"指挥" AI，自动完成 Excel 数据处理
 
@@ -93,9 +95,56 @@ AI 永远无法执行它"想"执行的代码，它只能"请求"调用你在 `ex
 
 ## 🚀 快速开始
 
-### 1. 安装
+### 方式 1：Docker 部署（推荐）🐳
+
+**适合**：快速部署、生产环境、不想配置环境
 
 ```bash
+# 1. 克隆项目
+git clone https://github.com/your-username/Merlin.git
+cd Merlin
+
+# 2. 配置环境变量
+cp env.example .env
+nano .env  # 填入你的 API Key
+
+# 3. 启动服务（二选一）
+docker-compose up -d          # 使用 docker-compose
+# 或
+make up                       # 使用 Makefile（更简单）
+
+# 4. 访问应用
+# 打开浏览器访问 http://localhost:8000
+```
+
+**常用命令**：
+```bash
+make logs      # 查看日志
+make restart   # 重启服务
+make down      # 停止服务
+make update    # 更新并重启
+```
+
+**环境要求**：
+- Docker 20.10+
+- Docker Compose 2.0+
+
+---
+
+### 方式 2：本地开发部署
+
+**适合**：开发调试、功能定制、学习源码
+
+#### 1. 环境准备
+
+- Python 3.8+
+- Node.js 16+
+- npm 或 yarn
+
+#### 2. 安装依赖
+
+```bash
+# 克隆项目
 git clone https://github.com/your-username/Merlin.git
 cd Merlin
 
@@ -106,27 +155,58 @@ pip install -r requirements.txt
 cd frontend && npm install && cd ..
 ```
 
-### 2. 配置 API
+#### 3. 配置 API
 
+**方式 A：使用配置向导（推荐）**
 ```bash
-python setup.py  # 配置向导
+python setup.py
 ```
 
-或手动创建 `.env`：
+**方式 B：手动配置**
+```bash
+cp env.example .env
+nano .env  # 编辑配置文件
+```
+
+`.env` 配置示例：
 ```env
-OPENAI_API_KEY=你的API密钥
+OPENAI_API_KEY=your-api-key-here
 OPENAI_API_BASE=https://api.moonshot.cn/v1
 ```
 
-> 💡 支持 Kimi、OpenAI、DeepSeek 等所有兼容 OpenAI API 的服务
+> 💡 **支持的 API 服务**：
+> - Moonshot (Kimi)：`https://api.moonshot.cn/v1`
+> - OpenAI：`https://api.openai.com/v1`
+> - DeepSeek：`https://api.deepseek.com/v1`
+> - 其他兼容 OpenAI 接口的服务
 
-### 3. 启动
+#### 4. 启动服务
 
+**方式 A：一键启动（推荐）**
 ```bash
-./start.sh  # 一键启动，自动打开浏览器
+./start.sh  # 自动启动后端+前端，并打开浏览器
 ```
 
-访问 http://localhost:5173 开始使用！
+**方式 B：分别启动**
+```bash
+# 终端 1：启动后端
+python -m uvicorn app.asgi:application --reload
+
+# 终端 2：启动前端
+cd frontend && npm run dev
+```
+
+#### 5. 访问应用
+
+- **前端界面**：http://localhost:5173
+- **API 文档**：http://localhost:8000/docs
+- **健康检查**：http://localhost:8000/
+
+#### 6. 停止服务
+
+```bash
+./stop.sh  # 停止所有服务
+```
 
 ---
 
@@ -271,9 +351,75 @@ python test.py engine
 
 ---
 
+## 🔧 常见问题
+
+### Docker 部署相关
+
+**Q: 端口 8000 被占用怎么办？**
+
+修改 `docker-compose.yml` 中的端口映射：
+```yaml
+ports:
+  - "8080:8000"  # 改为其他端口
+```
+
+**Q: 如何查看容器日志？**
+```bash
+make logs              # 推荐
+# 或
+docker-compose logs -f
+```
+
+**Q: 如何进入容器调试？**
+```bash
+make shell             # 推荐
+# 或
+docker-compose exec merlin /bin/bash
+```
+
+**Q: 上传的文件在哪里？**
+
+文件存储在 `./uploads` 目录，通过 Docker 卷挂载持久化。
+
+**Q: 如何更新到最新版本？**
+```bash
+git pull
+make update            # 自动重新构建并重启
+```
+
+### 本地部署相关
+
+**Q: 前端启动失败？**
+```bash
+# 重新安装依赖
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
+```
+
+**Q: 后端启动失败？**
+```bash
+# 检查依赖
+pip install -r requirements.txt --upgrade
+
+# 检查端口占用
+lsof -i :8000
+```
+
+**Q: API Key 配置不生效？**
+
+确保 `.env` 文件在项目根目录，且格式正确：
+```env
+OPENAI_API_KEY=sk-xxx  # 注意：等号两边不要有空格
+OPENAI_API_BASE=https://api.moonshot.cn/v1
+```
+
+---
+
 ## 🛣️ 路线图
 
-### ✅ v0.1.0（当前版本）
+### ✅ v0.0.5（当前版本）
 - **三阶段 AI 架构**（总指挥 + 路由器 + 专家）
   - 复合指令自动拆分和串行执行
   - 智能建议 + 模糊匹配列名
@@ -306,9 +452,9 @@ python test.py engine
   - 内嵌下载按钮（在成功消息中）
 
 ### 🚧 未来计划
-- **v0.1.0-beta** - 操作历史与撤销、批量文件处理
+- **v0.1.0** - 操作历史与撤销、批量文件处理
 - **v0.2.0** - 多表格支持、规则模板、智能澄清对话
-- **v1.0.0** - 公式引擎、完整文档、Docker部署
+- **v1.0.0** - 公式引擎、完整文档、生产级优化
 
 ---
 
@@ -345,7 +491,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 📮 联系方式
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/Merlin/issues)
+- **Issues**: [GitHub Issues](https://github.com/TJxiaobao/Merlin/issues)
 - **Email**: gaoxingcun@apache.org
 
 ---

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  merlin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: merlin-app
+    ports:
+      - "8000:8000"  # Backend API
+      - "5173:5173"  # Frontend (if needed for dev)
+    volumes:
+      # Persist uploads
+      - ./uploads:/app/uploads
+      # Optional: Mount .env file
+      - ./.env:/app/.env:ro
+    environment:
+      # Override with your API keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.moonshot.cn/v1}
+      - UPLOAD_DIR=/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - merlin-network
+
+networks:
+  merlin-network:
+    driver: bridge
+
+volumes:
+  uploads:
+    driver: local
+

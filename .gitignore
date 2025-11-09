@@ -56,3 +56,7 @@ nohup.out
 backend.log
 frontend.log
 
+# Docker
+*.tar.gz
+uploads-backup-*.tar.gz
+
