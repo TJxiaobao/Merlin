@@ -6,12 +6,14 @@ License: MIT
 """
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import uuid
 import json
 from typing import Dict
 import logging
+import os
 
 from .excel_engine import ExcelEngine
 from .ai_translator import get_translator
@@ -39,6 +41,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 挂载前端静态文件
+frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(frontend_path):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+    logger.info(f"✅ 静态文件路径已挂载: {frontend_path}")
+else:
+    logger.warning(f"⚠️ 前端目录不存在: {frontend_path}")
 
 # 全局存储：文件ID -> ExcelEngine实例
 engines: Dict[str, ExcelEngine] = {}
@@ -69,6 +79,20 @@ async def startup_event():
 
 @app.get("/")
 async def root():
+    """返回前端页面"""
+    frontend_index = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist", "index.html")
+    if os.path.exists(frontend_index):
+        return FileResponse(frontend_index)
+    else:
+        return {
+            "status": "ok",
+            "message": "Merlin AI Excel 助手运行中",
+            "version": "0.0.5",
+            "error": "前端文件未找到"
+        }
+
+@app.get("/health")
+async def health():
     """健康检查"""
     return {
         "message": "Merlin AI Excel助手运行中",
