@@ -8,6 +8,9 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
+# 配置 npm 使用国内镜像源（显著加速）
+RUN npm config set registry https://registry.npmmirror.com
+
 # Copy frontend package files
 COPY frontend/package.json frontend/package-lock.json ./
 
@@ -33,6 +36,10 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
+# 配置 apt 使用国内镜像源（加速系统依赖安装）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -45,8 +52,10 @@ COPY requirements.txt .
 
 # Install Python dependencies with optimizations
 # --no-cache-dir: 不保存缓存，减少镜像大小
-# pip install 使用国内镜像源加速（可选）
-RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# pip install 使用国内镜像源加速（阿里云源，更稳定）
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set install.trusted-host mirrors.aliyun.com && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
 COPY app/ ./app/
