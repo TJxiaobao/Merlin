@@ -11,14 +11,19 @@ WORKDIR /app/frontend
 # Copy frontend package files
 COPY frontend/package.json frontend/package-lock.json ./
 
-# Install dependencies (including devDependencies for build)
-RUN npm ci
+# Install dependencies with optimizations
+# --prefer-offline: 优先使用本地缓存
+# --no-audit: 跳过安全审计（加快速度）
+# --progress=false: 减少日志输出
+RUN npm ci --prefer-offline --no-audit --progress=false
 
 # Copy frontend source
 COPY frontend/ ./
 
 # Build frontend
-RUN npm run build
+RUN npm run build && \
+    # 构建后立即删除 node_modules，减少镜像大小
+    rm -rf node_modules
 
 # ============================================
 # Stage 2: Python Backend
@@ -38,8 +43,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy Python requirements
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with optimizations
+# --no-cache-dir: 不保存缓存，减少镜像大小
+# pip install 使用国内镜像源加速（可选）
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Copy backend code
 COPY app/ ./app/

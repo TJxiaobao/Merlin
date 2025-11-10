@@ -10,13 +10,17 @@ help: ## 显示帮助信息
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
-build: ## 构建 Docker 镜像
+build: ## 构建 Docker 镜像（启用 BuildKit 加速）
 	@echo "🔨 构建 Merlin 镜像..."
-	docker compose build
+	DOCKER_BUILDKIT=1 docker compose build
 
-up: ## 启动服务
+build-fast: ## 快速构建（使用缓存）
+	@echo "⚡ 快速构建 Merlin 镜像..."
+	DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose build --parallel
+
+up: ## 启动服务（首次启动会自动构建）
 	@echo "🚀 启动 Merlin 服务..."
-	docker compose up -d
+	DOCKER_BUILDKIT=1 docker compose up -d --build
 	@echo "✅ 服务已启动！"
 	@echo "📱 访问: http://localhost:8000"
 

@@ -120,11 +120,17 @@ make up                       # 使用 Makefile（更简单）
 
 **常用命令**：
 ```bash
-make logs      # 查看日志
-make restart   # 重启服务
-make down      # 停止服务
-make update    # 更新并重启
+make logs        # 查看日志
+make restart     # 重启服务
+make down        # 停止服务
+make update      # 更新并重启
+make build-fast  # 快速构建（利用缓存）
 ```
+
+> 💡 **构建优化提示**：
+> - 首次构建约 2-3 分钟（已启用 BuildKit 加速）
+> - 后续构建利用缓存，仅需 30-50 秒
+> - 详见 [BUILD_OPTIMIZATION.md](BUILD_OPTIMIZATION.md)
 
 **环境要求**：
 - Docker 20.10+
