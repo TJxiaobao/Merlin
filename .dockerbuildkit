@@ -1,7 +1,0 @@
-# Docker BuildKit 配置
-# 启用 BuildKit 可以大幅提升构建速度
-
-# 使用方法：
-# export DOCKER_BUILDKIT=1
-# docker compose build
-

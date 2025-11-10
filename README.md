@@ -96,9 +96,7 @@ AI 永远无法执行它"想"执行的代码，它只能"请求"调用你在 `ex
 
 ## 🚀 快速开始
 
-### 方式 1：Docker 部署（推荐）🐳
-
-**适合**：快速部署、生产环境、不想配置环境
+### 方式 1：Docker 一键部署（推荐）🐳
 
 ```bash
 # 1. 克隆项目
@@ -107,38 +105,60 @@ cd Merlin
 
 # 2. 配置环境变量
 cp env.example .env
-nano .env  # 填入你的 API Key
+vim .env  # 修改 OPENAI_API_KEY
 
-# 3. 启动服务（二选一）
-docker compose up -d          # 使用 docker compose
-# 或
-make up                       # 使用 Makefile（更简单）
+# 3. 一键部署
+make deploy
 
-# 4. 访问应用
-# 打开浏览器访问 http://localhost:8000
+# 4. 访问服务
+# 浏览器打开: http://localhost:1108
+```
+
+**就这么简单！** ✅ 容器会自动构建前端、安装依赖、启动服务。
+
+---
+
+### 方式 2：手动 Docker 部署
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/TJxiaobao/Merlin.git
+cd Merlin
+
+# 2. 配置环境变量
+cp env.example .env
+nano .env  # 填入你的 OPENAI_API_KEY
+
+# 3. 构建并启动
+export DOCKER_BUILDKIT=1
+docker compose build
+docker compose up -d
+
+# 4. 访问服务
+# 浏览器打开: http://localhost:1108
 ```
 
 **常用命令**：
 ```bash
-make logs        # 查看日志
+make help        # 查看所有命令
+make logs        # 查看实时日志
+make status      # 查看服务状态
 make restart     # 重启服务
 make down        # 停止服务
-make update      # 更新并重启
-make build-fast  # 快速构建（利用缓存）
+make update      # 拉取代码并更新
 ```
-
-> 💡 **构建优化提示**：
-> - 首次构建约 2-3 分钟（已启用 BuildKit 加速）
-> - 后续构建利用缓存，仅需 30-50 秒
-> - 详见 [BUILD_OPTIMIZATION.md](BUILD_OPTIMIZATION.md)
 
 **环境要求**：
 - Docker 20.10+
-- Docker Compose V2（集成在 Docker CLI 中）
+- Docker Compose V2
+
+**构建速度**：
+- 首次构建: ~40-60 秒（已优化国内镜像源）
+- 后续构建: ~10-20 秒（利用缓存）
 
 ---
 
-### 方式 2：本地开发部署
+### 方式 3：本地开发部署
 
 **适合**：开发调试、功能定制、学习源码
 
@@ -362,26 +382,43 @@ python test.py engine
 
 ### Docker 部署相关
 
-**Q: 端口 8000 被占用怎么办？**
+**Q: 如何访问服务？**
 
-修改 `docker-compose.yml` 中的端口映射：
+默认端口是 **1108**：
+- 本地访问：`http://localhost:1108`
+- 服务器访问：`http://你的服务器IP:1108`
+
+**Q: 如何修改端口？**
+
+编辑 `docker-compose.yml`：
 ```yaml
 ports:
-  - "8080:8000"  # 改为其他端口
+  - "自定义端口:8000"  # 例如 "8080:8000"
 ```
 
-**Q: 如何查看容器日志？**
+**Q: 容器启动后无法访问？**
+
+检查步骤：
 ```bash
-make logs              # 推荐
-# 或
-docker compose logs -f
+make status      # 查看容器状态（应该是 healthy）
+make logs        # 查看日志是否有错误
+make inspect     # 查看容器配置
+
+# 检查端口是否正确映射
+docker compose ps
+```
+
+**Q: 如何查看实时日志？**
+```bash
+make logs              # 实时日志（推荐）
+make logs-tail         # 最近50行
+docker compose logs -f # 原生命令
 ```
 
 **Q: 如何进入容器调试？**
 ```bash
-make shell             # 推荐
-# 或
-docker compose exec merlin /bin/bash
+make shell             # 进入容器（推荐）
+make inspect           # 查看配置和路径
 ```
 
 **Q: 上传的文件在哪里？**
@@ -390,9 +427,21 @@ docker compose exec merlin /bin/bash
 
 **Q: 如何更新到最新版本？**
 ```bash
+make update            # 自动拉取代码、重新构建并重启
+# 或手动
 git pull
-make update            # 自动重新构建并重启
+make rebuild
+make up
 ```
+
+**Q: 构建速度慢怎么办？**
+
+项目已优化国内镜像源：
+- NPM：淘宝镜像（https://registry.npmmirror.com）
+- APT：阿里云镜像
+- PIP：阿里云镜像
+
+首次构建约 40-60 秒，后续利用缓存仅需 10-20 秒。
 
 ### 本地部署相关
 

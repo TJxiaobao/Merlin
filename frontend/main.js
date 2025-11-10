@@ -9,7 +9,8 @@ import './style.css'
 import io from 'socket.io-client';  // ⭐️ 导入 Socket.IO
 import { startStreamingMessage, updateStreamingMessage, finishStreamingMessage, cancelStreamingMessage } from './streaming.js';
 
-const API_BASE_URL = 'http://localhost:8000';
+// 自动检测 API 地址（支持本地开发和生产部署）
+const API_BASE_URL = window.location.origin;
 
 let currentFileId = null;
 let currentHeaders = [];
@@ -469,7 +470,7 @@ async function checkServerConnection() {
 function initWebSocket() {
     if (socket) return;
     
-    socket = io('http://localhost:8000', {
+    socket = io(API_BASE_URL, {
         transports: ['websocket', 'polling']
     });
     
