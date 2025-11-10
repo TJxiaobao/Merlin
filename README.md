@@ -102,7 +102,7 @@ AI 永远无法执行它"想"执行的代码，它只能"请求"调用你在 `ex
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/Merlin.git
+git clone https://github.com/TJxiaobao/Merlin.git
 cd Merlin
 
 # 2. 配置环境变量
@@ -110,7 +110,7 @@ cp env.example .env
 nano .env  # 填入你的 API Key
 
 # 3. 启动服务（二选一）
-docker-compose up -d          # 使用 docker-compose
+docker compose up -d          # 使用 docker compose
 # 或
 make up                       # 使用 Makefile（更简单）
 
@@ -128,7 +128,7 @@ make update    # 更新并重启
 
 **环境要求**：
 - Docker 20.10+
-- Docker Compose 2.0+
+- Docker Compose V2（集成在 Docker CLI 中）
 
 ---
 
@@ -368,14 +368,14 @@ ports:
 ```bash
 make logs              # 推荐
 # 或
-docker-compose logs -f
+docker compose logs -f
 ```
 
 **Q: 如何进入容器调试？**
 ```bash
 make shell             # 推荐
 # 或
-docker-compose exec merlin /bin/bash
+docker compose exec merlin /bin/bash
 ```
 
 **Q: 上传的文件在哪里？**
