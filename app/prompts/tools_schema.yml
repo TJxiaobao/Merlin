@@ -146,6 +146,66 @@ coordinator_tools:
         required:
           - tasks
 
+# -----------------------------------------------------------------------------
+# 路由工具（Router Tools）- 用于 AI 路由兜底（两级路由）
+# -----------------------------------------------------------------------------
+router_tools:
+  - type: function
+    function:
+      name: route_to_filling
+      description: 路由到【填充专家】- 处理数据填充、修改、设置、复制等操作
+      parameters:
+        type: object
+        properties: {}
+  
+  - type: function
+    function:
+      name: route_to_math
+      description: 路由到【数学专家】- 处理数学计算、新建列、四则运算等操作
+      parameters:
+        type: object
+        properties: {}
+  
+  - type: function
+    function:
+      name: route_to_cleaning
+      description: 路由到【清洗专家】- 处理数据清洗、去空格、填充缺失值、去重等操作
+      parameters:
+        type: object
+        properties: {}
+  
+  - type: function
+    function:
+      name: route_to_text
+      description: 路由到【文本专家】- 处理文本替换、合并、拆分、大小写转换等操作
+      parameters:
+        type: object
+        properties: {}
+  
+  - type: function
+    function:
+      name: route_to_date
+      description: 路由到【日期专家】- 处理日期提取、年月日分离等操作
+      parameters:
+        type: object
+        properties: {}
+  
+  - type: function
+    function:
+      name: route_to_structure
+      description: 路由到【结构专家】- 处理排序、去重、筛选等数据结构调整操作
+      parameters:
+        type: object
+        properties: {}
+  
+  - type: function
+    function:
+      name: route_to_analysis
+      description: 路由到【分析专家】- 处理统计、分组、汇总、分布分析等操作
+      parameters:
+        type: object
+        properties: {}
+
 
 # -----------------------------------------------------------------------------
 # Excel 操作工具（Excel Operation Tools）

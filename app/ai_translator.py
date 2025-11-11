@@ -271,6 +271,85 @@ class AITranslator:
             logger.error(f"总指挥调用失败: {e}")
             return None
     
+    def _call_ai_router(self, command: str) -> Optional[str]:
+        """
+        调用 AI 路由来决定工具组（两级路由的第二级）
+        
+        Args:
+            command: 用户的指令
+        
+        Returns:
+            工具组名称（filling/math/cleaning/text/date/structure/analysis），如果失败返回 None
+        """
+        try:
+            logger.info("🤖 调用 AI 路由（关键词未命中，使用 AI 兜底）")
+            
+            # 从 YAML 加载路由 AI 的 prompt 和 tools
+            router_prompt = get_prompt('system_prompts.router')
+            router_tool_names = [
+                'route_to_filling',
+                'route_to_math',
+                'route_to_cleaning',
+                'route_to_text',
+                'route_to_date',
+                'route_to_structure',
+                'route_to_analysis'
+            ]
+            router_tools = get_tools_by_names(router_tool_names)
+            
+            # 构造消息
+            messages = [
+                {"role": "system", "content": router_prompt},
+                {"role": "user", "content": command}
+            ]
+            
+            # 输出 AI 请求日志
+            logger.info("=" * 60)
+            logger.info("📤 AI 请求 (Router)")
+            logger.info(f"Model: {self.model}")
+            logger.info(f"Command: {command}")
+            logger.info("=" * 60)
+            
+            # 调用 AI
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                tools=router_tools,
+                tool_choice="required"  # 强制调用工具
+            )
+            
+            message = response.choices[0].message
+            
+            # 输出 AI 响应日志
+            logger.info("=" * 60)
+            logger.info("📥 AI 响应 (Router)")
+            logger.info(f"Finish Reason: {response.choices[0].finish_reason}")
+            if message.tool_calls:
+                tool_name = message.tool_calls[0].function.name
+                logger.info(f"Tool: {tool_name}")
+            logger.info("=" * 60)
+            
+            # 检查是否调用了工具
+            if not message.tool_calls:
+                logger.warning("AI 路由未调用工具")
+                return None
+            
+            # 解析工具名：route_to_filling → filling
+            tool_call = message.tool_calls[0]
+            tool_name = tool_call.function.name
+            
+            if tool_name.startswith("route_to_"):
+                group_name = tool_name.replace("route_to_", "")
+                logger.info(f"🎯 AI 路由结果: {group_name}")
+                return group_name
+            else:
+                logger.warning(f"AI 路由返回了错误的工具: {tool_name}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"AI 路由调用失败: {e}")
+            return None
+    
     def translate_single_task(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         公开方法：翻译单个任务（供WebSocket调用）
@@ -304,18 +383,31 @@ class AITranslator:
                     "message": help_message
                 }
             
-            # ⭐️ 关键词路由优化 - 减少Token消耗
+            # ⭐️ 两级路由优化 - 关键词优先，AI 兜底
+            # 第一级：关键词路由（快速，0 延迟）
             detected_group = self._detect_tool_group(user_command)
+            
             if detected_group:
                 # 命中关键词，只使用该组的工具
                 tool_groups = self._get_tool_groups()
                 filter_tools = tool_groups[detected_group]["tools"]
                 tools = self.get_tools_definition(filter_tools=filter_tools)
-                logger.info(f"✅ 关键词路由优化生效，Token预计减少 60-70%")
+                logger.info(f"✅ 【第一级路由】关键词命中: {detected_group}，Token预计减少 60-70%")
             else:
-                # 未命中，使用所有工具（兜底）
-                tools = self.get_tools_definition()
-                logger.info("未命中关键词，使用全量工具")
+                # 第二级：AI 路由（智能兜底）
+                logger.info("⚠️ 【第一级路由】关键词未命中，启动第二级 AI 路由")
+                ai_routed_group = self._call_ai_router(user_command)
+                
+                if ai_routed_group:
+                    # AI 路由成功
+                    tool_groups = self._get_tool_groups()
+                    filter_tools = tool_groups[ai_routed_group]["tools"]
+                    tools = self.get_tools_definition(filter_tools=filter_tools)
+                    logger.info(f"✅ 【第二级路由】AI 路由成功: {ai_routed_group}，Token预计减少 60-70%")
+                else:
+                    # AI 路由也失败，降级到所有工具（最后兜底）
+                    tools = self.get_tools_definition()
+                    logger.info("⚠️ 【第二级路由】AI 路由失败，降级使用全量工具")
             
             # 构造消息列表（可能包含历史）
             messages = [{"role": "system", "content": self.build_system_prompt(headers)}]

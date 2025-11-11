@@ -165,15 +165,17 @@ def load_tools(config_path: str = "app/prompts/tools_schema.yml") -> None:
         # 加载工具分组配置
         _tool_groups = config.get('tool_groups', {})
         
-        # 合并 coordinator_tools 和 tools
+        # 合并 coordinator_tools、router_tools 和 tools
         coordinator_tools = config.get('coordinator_tools', [])
+        router_tools = config.get('router_tools', [])
         excel_tools = config.get('tools', [])
-        _tools = coordinator_tools + excel_tools
+        _tools = coordinator_tools + router_tools + excel_tools
         
         _tools_loaded = True
         logger.info(f"✅ Merlin 工具 Schema 加载成功: {config_path}")
         logger.info(f"   - 工具分组: {len(_tool_groups)} 个")
         logger.info(f"   - 总指挥工具: {len(coordinator_tools)} 个")
+        logger.info(f"   - 路由工具: {len(router_tools)} 个")
         logger.info(f"   - Excel 工具: {len(excel_tools)} 个")
         logger.info(f"   - 总计: {len(_tools)} 个")
         

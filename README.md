@@ -225,7 +225,7 @@ cd frontend && npm run dev
 
 #### 5. 访问应用
 
-- **前端界面**：http://localhost:5173
+- **前端界面**：http://localhost:1108
 - **API 文档**：http://localhost:8000/docs
 - **健康检查**：http://localhost:8000/
 
@@ -393,7 +393,7 @@ python test.py engine
 编辑 `docker-compose.yml`：
 ```yaml
 ports:
-  - "自定义端口:8000"  # 例如 "8080:8000"
+  - "自定义端口:8000"  # 例如 "1108:8000" (前端访问端口:后端API端口)
 ```
 
 **Q: 容器启动后无法访问？**
@@ -460,7 +460,8 @@ npm run dev
 pip install -r requirements.txt --upgrade
 
 # 检查端口占用
-lsof -i :8000
+lsof -i :1108  # 前端
+lsof -i :8000  # 后端
 ```
 
 **Q: API Key 配置不生效？**

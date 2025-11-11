@@ -10,7 +10,7 @@ import io from 'socket.io-client';  // ⭐️ 导入 Socket.IO
 import { startStreamingMessage, updateStreamingMessage, finishStreamingMessage, cancelStreamingMessage } from './streaming.js';
 
 // 自动检测 API 地址（支持本地开发和生产部署）
-// ⭐️ 开发环境：前端在 5173，后端在 8000
+// ⭐️ 开发环境：前端在 1108，后端在 8000
 // ⭐️ 生产环境：前后端在同一域名
 const API_BASE_URL = import.meta.env.DEV 
     ? 'http://localhost:8000'  // 开发环境：直接连接后端

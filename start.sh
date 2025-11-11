@@ -70,16 +70,16 @@ pkill -9 -f "vite" 2>/dev/null
 # 清理占用端口的进程
 echo "🔍 检查端口占用..."
 PORT_8000=$(lsof -ti :8000)
-PORT_5173=$(lsof -ti :5173)
+PORT_1108=$(lsof -ti :1108)
 
 if [ ! -z "$PORT_8000" ]; then
     echo "   清理 8000 端口 (PID: $PORT_8000)"
     kill -9 $PORT_8000 2>/dev/null
 fi
 
-if [ ! -z "$PORT_5173" ]; then
-    echo "   清理 5173 端口 (PID: $PORT_5173)"
-    kill -9 $PORT_5173 2>/dev/null
+if [ ! -z "$PORT_1108" ]; then
+    echo "   清理 1108 端口 (PID: $PORT_1108)"
+    kill -9 $PORT_1108 2>/dev/null
 fi
 
 sleep 1
@@ -110,7 +110,7 @@ FRONTEND_PID=$!
 cd ..
 
 echo "   ✅ 前端服务已启动 (PID: $FRONTEND_PID)"
-echo "   🌐 访问地址: http://localhost:5173"
+echo "   🌐 访问地址: http://localhost:1108"
 echo "   📝 日志文件: frontend.log"
 echo ""
 
@@ -121,7 +121,7 @@ echo "================================"
 echo "🎉 Merlin 已启动！"
 echo ""
 echo "💡 访问方式："
-echo "   - 前端界面: http://localhost:5173"
+echo "   - 前端界面: http://localhost:1108"
 echo "   - API文档:  http://localhost:8000/docs"
 echo ""
 echo "📊 进程信息："
@@ -143,18 +143,18 @@ echo ""
 #sleep 2
 #if [[ "$OSTYPE" == "darwin"* ]]; then
 #    # macOS
-#    open http://localhost:5173
+#    open http://localhost:1108
 #elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
 #    # Linux
-#    xdg-open http://localhost:5173
+#    xdg-open http://localhost:1108
 #else
 #    # Windows (Git Bash)
-#    start http://localhost:5173
+#    start http://localhost:1108
 #fi
 
 echo ""
 echo "✅ 启动完成！浏览器应该已自动打开"
-echo "   如果没有，请手动访问: http://localhost:5173"
+echo "   如果没有，请手动访问: http://localhost:1108"
 echo ""
 echo "💡 提示："
 echo "   - 修改代码会自动热更新"

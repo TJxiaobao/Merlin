@@ -76,7 +76,7 @@ ENV OPENAI_API_KEY=""
 ENV OPENAI_API_BASE="https://api.moonshot.cn/v1"
 
 # Expose ports
-EXPOSE 8000 5173
+EXPOSE 8000 1108
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

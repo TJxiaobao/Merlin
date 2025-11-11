@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: merlin-app
     ports:
-      - "1108:8000"  # 外部端口1108映射到容器内8000端口
+      - "1108:8000"  # 外部端口1108映射到容器内8000端口（前端访问）
+      - "8000:8000"  # 后端API端口
     volumes:
       # 持久化上传文件
       - ./uploads:/app/uploads
