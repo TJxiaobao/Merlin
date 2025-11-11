@@ -208,6 +208,23 @@ async def execute_command(request: ExecuteCommandRequest):
                 execution_log.append(translation_result.get("message", ""))
                 continue
             
+            # ⭐️ 检查是否是澄清请求
+            if translation_result.get("is_clarification"):
+                question = translation_result.get("question", "")
+                options = translation_result.get("options", [])
+                
+                logger.info(f"🔍 收到澄清请求: {question}")
+                logger.info(f"   选项: {options}")
+                
+                return ExecuteCommandResponse(
+                    success=True,
+                    message="需要澄清",
+                    execution_log=[],
+                    is_clarification=True,
+                    clarification_question=question,
+                    clarification_options=options
+                )
+            
             # 执行工具调用
             tool_calls = translation_result.get("tool_calls", [])
             if not tool_calls:

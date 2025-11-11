@@ -18,6 +18,10 @@ class ExecuteCommandResponse(BaseModel):
     execution_log: List[str]
     download_url: Optional[str] = None
     error: Optional[str] = None
+    # ⭐️ 澄清相关字段
+    is_clarification: Optional[bool] = False
+    clarification_question: Optional[str] = None
+    clarification_options: Optional[List[str]] = None
 
 
 class UploadFileResponse(BaseModel):

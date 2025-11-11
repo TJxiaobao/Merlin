@@ -28,6 +28,7 @@ tool_groups:
       - set_by_condition
       - copy_column
       - set_by_mapping
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
   math:
     keywords:
@@ -47,6 +48,7 @@ tool_groups:
       - "-"
     tools:
       - perform_math
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
   cleaning:
     keywords:
@@ -61,6 +63,7 @@ tool_groups:
       - trim_whitespace
       - fill_missing_values
       - find_and_replace
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
   text:
     keywords:
@@ -78,6 +81,7 @@ tool_groups:
       - concatenate_columns
       - split_column
       - change_case
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
   date:
     keywords:
@@ -89,6 +93,7 @@ tool_groups:
       - 提取
     tools:
       - extract_date_part
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
   structure:
     keywords:
@@ -102,6 +107,7 @@ tool_groups:
     tools:
       - drop_duplicates
       - sort_by_column
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
   analysis:
     keywords:
@@ -119,6 +125,7 @@ tool_groups:
     tools:
       - get_summary
       - group_by_aggregate
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
 # -----------------------------------------------------------------------------
 # 总指挥工具（Coordinator Tools）- 用于拆分复合指令
@@ -138,6 +145,7 @@ coordinator_tools:
             description: 包含用户所有独立指令的字符串列表。例如 ["指令A", "指令B"]
         required:
           - tasks
+
 
 # -----------------------------------------------------------------------------
 # Excel 操作工具（Excel Operation Tools）
@@ -489,4 +497,25 @@ tools:
             description: 是否升序。默认 true(升序)。如果用户说'降序'、'从高到低'，传 false
         required:
           - column_name
+
+  # === 通用澄清工具（所有专家都可使用） ===
+  - type: function
+    function:
+      name: ask_clarification_question
+      description: |
+        【【最高优先级】】
+        当且仅当用户的指令非常模糊、有歧义、或者你无法自信地将其匹配到任何其他工具时，你【必须】调用此工具。
+        【不要猜！】请向用户提问，让他澄清。
+      parameters:
+        type: object
+        properties:
+          question_to_user:
+            type: string
+            description: 你向用户提出的、具体的澄清问题。例如：'您说的"价格"是指哪一列？' 或 '我应该如何处理(税率+1)这个步骤？'
+          ambiguous_options:
+            type: array
+            items: { type: string }
+            description: （可选）如果适用，提供给用户的【选项按钮】。例如：['未税单价', '参考报价']
+        required:
+          - question_to_user
 

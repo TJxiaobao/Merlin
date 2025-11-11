@@ -23,6 +23,12 @@ export default defineConfig({
       '/download': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true
+      },
+      // ⭐️ Socket.IO 代理（虽然我们直接连接，但保留以防万一）
+      '/socket.io': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        ws: true  // 启用 WebSocket 代理
       }
     }
   },

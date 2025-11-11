@@ -247,6 +247,25 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                     }, room=sid)
                     continue
                 
+                # ⭐️ 检查是否是澄清请求
+                if translation_result.get("is_clarification"):
+                    question = translation_result.get("question", "")
+                    options = translation_result.get("options", [])
+                    
+                    logger.info(f"🔍 收到澄清请求: {question}")
+                    logger.info(f"   选项: {options}")
+                    
+                    await sio.emit('progress', {
+                        'type': 'clarify',
+                        'question': question,
+                        'options': options,
+                        'file_id': file_id,
+                        'original_command': command
+                    }, room=sid)
+                    
+                    # 澄清请求不继续执行，等待用户回复
+                    return
+                
                 # 执行工具调用
                 tool_calls = translation_result.get("tool_calls", [])
                 if not tool_calls:

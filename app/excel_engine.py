@@ -372,6 +372,7 @@ class ExcelEngine:
             return {
                 "success": True,
                 "message": log_msg,
+                "is_analysis": True,  # ⭐️ 标记为分析类工具，不需要保存文件
                 "column": column,
                 "total_rows": total_count,
                 "non_null_count": non_null_count,

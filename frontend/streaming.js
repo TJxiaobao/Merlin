@@ -67,7 +67,13 @@ export function updateStreamingMessage(newLine, options = {}) {
     streamingContent.forEach(item => {
         const icon = getIconForType(item.type);
         const cssClass = getCssClassForType(item.type);
-        html += `<div class="streaming-line ${cssClass}">${icon} ${item.text}</div>`;
+        
+        // ⭐️ 处理换行符：将 \n 转换为 <br>，并保留空格和缩进
+        let formattedText = item.text
+            .replace(/\n/g, '<br>')  // 换行符转换为 <br>
+            .replace(/  /g, '&nbsp;&nbsp;');  // 保留缩进（两个空格）
+        
+        html += `<div class="streaming-line ${cssClass}">${icon} ${formattedText}</div>`;
     });
     
     // 如果有进度条

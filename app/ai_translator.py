@@ -376,6 +376,16 @@ class AITranslator:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
                 
+                # ⭐️ 检测澄清请求
+                if function_name == "ask_clarification_question":
+                    logger.info("🔍 AI 请求澄清问题")
+                    return {
+                        "success": True,
+                        "is_clarification": True,
+                        "question": function_args.get("question_to_user", ""),
+                        "options": function_args.get("ambiguous_options", [])
+                    }
+                
                 tool_calls.append({
                     "tool_name": function_name,
                     "parameters": function_args

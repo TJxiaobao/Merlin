@@ -10,7 +10,14 @@ import io from 'socket.io-client';  // ⭐️ 导入 Socket.IO
 import { startStreamingMessage, updateStreamingMessage, finishStreamingMessage, cancelStreamingMessage } from './streaming.js';
 
 // 自动检测 API 地址（支持本地开发和生产部署）
-const API_BASE_URL = window.location.origin;
+// ⭐️ 开发环境：前端在 5173，后端在 8000
+// ⭐️ 生产环境：前后端在同一域名
+const API_BASE_URL = import.meta.env.DEV 
+    ? 'http://localhost:8000'  // 开发环境：直接连接后端
+    : window.location.origin;   // 生产环境：使用当前域名
+
+console.log('API_BASE_URL:', API_BASE_URL);
+console.log('环境:', import.meta.env.DEV ? '开发' : '生产');
 
 let currentFileId = null;
 let currentHeaders = [];
@@ -40,6 +47,14 @@ const sendBtnText = document.getElementById('sendBtnText');
 const magicWandBtn = document.getElementById('magicWandBtn');
 const featureModal = document.getElementById('featureModal');
 const modalClose = document.getElementById('modalClose');
+
+// ⭐️ 检查关键 DOM 元素是否存在
+if (!commandInput || !sendBtn) {
+    console.error('❌ 关键 DOM 元素未找到！请检查 HTML 结构');
+}
+if (!sendBtnText) {
+    console.warn('⚠️ sendBtnText 元素未找到，将使用 sendBtn.textContent');
+}
 
 // ==================== 文件上传相关 ====================
 
@@ -225,9 +240,14 @@ function copyToClipboard(text, button) {
 // ==================== 消息发送相关 ====================
 
 // 发送按钮
-sendBtn.addEventListener('click', () => {
-    sendCommand();
-});
+if (sendBtn) {
+    sendBtn.addEventListener('click', () => {
+        console.log('发送按钮被点击');
+        sendCommand();
+    });
+} else {
+    console.error('❌ sendBtn 元素未找到，无法绑定点击事件');
+}
 
 // Enter 发送，Shift+Enter 换行
 commandInput.addEventListener('keydown', (e) => {
@@ -246,41 +266,77 @@ commandInput.addEventListener('input', () => {
 // 发送指令函数（改为 WebSocket）
 async function sendCommand() {
     const command = commandInput.value.trim();
-    if (!command || !currentFileId) return;
-
-    // 初始化 WebSocket（如果还没有）
-    if (!socket || !socket.connected) {
-        initWebSocket();
-        // 等待连接建立
-        await new Promise(resolve => {
-            if (socket.connected) {
-                resolve();
-            } else {
-                socket.once('connect', resolve);
-            }
-        });
+    
+    // ⭐️ 添加错误提示
+    if (!command) {
+        console.warn('指令为空');
+        return;
+    }
+    
+    if (!currentFileId) {
+        console.error('文件未上传');
+        addMessage('assistant', '❌ 请先上传 Excel 文件');
+        return;
     }
 
-    // 隐藏空状态
-    emptyState.style.display = 'none';
+    try {
+        // 初始化 WebSocket（如果还没有）
+        if (!socket || !socket.connected) {
+            console.log('初始化 WebSocket 连接...');
+            initWebSocket();
+            // 等待连接建立（最多等待5秒）
+            await new Promise((resolve, reject) => {
+                if (socket.connected) {
+                    resolve();
+                } else {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('WebSocket 连接超时'));
+                    }, 5000);
+                    socket.once('connect', () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    });
+                    socket.once('connect_error', (error) => {
+                        clearTimeout(timeout);
+                        reject(error);
+                    });
+                }
+            });
+        }
 
-    // 显示用户消息
-    addMessage('user', command);
-    commandInput.value = '';
-    commandInput.style.height = 'auto';
+        // 隐藏空状态
+        emptyState.style.display = 'none';
 
-    // 禁用输入
-    commandInput.disabled = true;
-    sendBtn.disabled = true;
-    sendBtnText.innerHTML = '<span class="loading"></span>';
+        // 显示用户消息
+        addMessage('user', command);
+        commandInput.value = '';
+        commandInput.style.height = 'auto';
 
-    // ⭐️ 通过 WebSocket 发送执行请求（而非 HTTP POST）
-    socket.emit('start_execution', {
-                file_id: currentFileId,
-                command: command
-    });
-    
-    // 注意：不需要 try-catch，因为所有响应都通过 socket.on('progress') 处理
+        // 禁用输入
+        commandInput.disabled = true;
+        sendBtn.disabled = true;
+        if (sendBtnText) {
+            sendBtnText.innerHTML = '<span class="loading"></span>';
+        }
+
+        // ⭐️ 通过 WebSocket 发送执行请求（而非 HTTP POST）
+        console.log('发送执行请求:', { file_id: currentFileId, command });
+        socket.emit('start_execution', {
+            file_id: currentFileId,
+            command: command
+        });
+        
+    } catch (error) {
+        console.error('发送指令失败:', error);
+        addMessage('assistant', `❌ 发送失败: ${error.message || '未知错误'}`);
+        
+        // 恢复输入
+        commandInput.disabled = false;
+        sendBtn.disabled = false;
+        if (sendBtnText) {
+            sendBtnText.textContent = '发送';
+        }
+    }
 }
 
 // ==================== 消息显示相关 ====================
@@ -468,18 +524,33 @@ async function checkServerConnection() {
 
 // 初始化 WebSocket 连接
 function initWebSocket() {
-    if (socket) return;
+    if (socket && socket.connected) {
+        console.log('WebSocket 已连接，跳过初始化');
+        return;
+    }
     
+    console.log('正在初始化 WebSocket 连接...');
+    console.log('连接地址:', API_BASE_URL);
     socket = io(API_BASE_URL, {
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        path: '/socket.io/',  // ⭐️ 明确指定 Socket.IO 路径
+        autoConnect: true
     });
     
     socket.on('connect', () => {
         console.log('✅ WebSocket 连接成功');
     });
     
-    socket.on('disconnect', () => {
-        console.log('🔌 WebSocket 断开');
+    socket.on('disconnect', (reason) => {
+        console.log('🔌 WebSocket 断开:', reason);
+    });
+    
+    socket.on('connect_error', (error) => {
+        console.error('❌ WebSocket 连接错误:', error);
+        addMessage('assistant', '❌ 无法连接到服务器，请检查后端是否运行');
     });
     
     socket.on('connection_status', (data) => {
@@ -488,6 +559,11 @@ function initWebSocket() {
     
     socket.on('progress', (data) => {
         handleProgressUpdate(data);
+    });
+    
+    socket.on('error', (error) => {
+        console.error('WebSocket 错误:', error);
+        addMessage('assistant', `❌ 发生错误: ${error.message || '未知错误'}`);
     });
 }
 
@@ -625,7 +701,148 @@ function handleProgressUpdate(data) {
             sendBtn.disabled = false;
             sendBtnText.textContent = '发送';
             break;
+            
+        case 'clarify':
+            // ⭐️ 处理澄清请求
+            finishStreamingMessage(false);  // 先完成当前流式消息
+            showClarificationDialog(data);
+            
+            // ⭐️ 恢复输入状态（用户可能想修改指令）
+            commandInput.disabled = false;
+            sendBtn.disabled = false;
+            sendBtnText.textContent = '发送';
+            break;
     }
+}
+
+// ⭐️ 显示澄清对话框
+function showClarificationDialog(data) {
+    const { question, options = [], file_id, original_command } = data;
+    
+    // 创建澄清消息气泡
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant clarification';
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.textContent = '🧙';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    // 问题文本
+    const questionDiv = document.createElement('div');
+    questionDiv.className = 'clarification-question';
+    questionDiv.innerHTML = `❓ <strong>${question}</strong>`;
+    contentDiv.appendChild(questionDiv);
+    
+    // 选项按钮容器
+    if (options && options.length > 0) {
+        const optionsDiv = document.createElement('div');
+        optionsDiv.className = 'clarification-options';
+        
+        options.forEach((option, index) => {
+            const optionBtn = document.createElement('button');
+            optionBtn.className = 'clarification-option-btn';
+            optionBtn.textContent = option;
+            optionBtn.onclick = () => {
+                handleClarificationResponse(option, file_id, original_command);
+                messageDiv.classList.add('clarification-answered');
+            };
+            optionsDiv.appendChild(optionBtn);
+        });
+        
+        contentDiv.appendChild(optionsDiv);
+    }
+    
+    // 自定义输入框
+    const inputDiv = document.createElement('div');
+    inputDiv.className = 'clarification-input';
+    
+    const inputField = document.createElement('input');
+    inputField.type = 'text';
+    inputField.className = 'clarification-text-input';
+    inputField.placeholder = '或者输入您的回答...';
+    
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'clarification-submit-btn';
+    submitBtn.textContent = '提交';
+    submitBtn.onclick = () => {
+        const answer = inputField.value.trim();
+        if (answer) {
+            handleClarificationResponse(answer, file_id, original_command);
+            messageDiv.classList.add('clarification-answered');
+        }
+    };
+    
+    inputField.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitBtn.click();
+        }
+    });
+    
+    inputDiv.appendChild(inputField);
+    inputDiv.appendChild(submitBtn);
+    contentDiv.appendChild(inputDiv);
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+    
+    // 聚焦输入框
+    setTimeout(() => inputField.focus(), 100);
+}
+
+// ⭐️ 处理澄清响应
+function handleClarificationResponse(answer, file_id, original_command) {
+    console.log('处理澄清响应:', { answer, file_id, original_command });
+    
+    // 显示用户的回答
+    addMessage('user', answer);
+    
+    // ⭐️ 智能替换：尝试将答案代入原始指令
+    // 策略1：如果原始指令中包含常见的模糊词（价格、单价等），替换它
+    // 策略2：如果策略1没匹配，追加说明
+    let newCommand = original_command;
+    
+    const ambiguousTerms = ['价格', '单价', '总价', '金额', '费用', '成本', '收入', '支出'];
+    let replaced = false;
+    
+    for (const term of ambiguousTerms) {
+        if (original_command.includes(term)) {
+            newCommand = original_command.replace(new RegExp(term, 'g'), answer);
+            replaced = true;
+            console.log(`替换 "${term}" 为 "${answer}"`);
+            break;
+        }
+    }
+    
+    // 如果没有找到可替换的词，使用追加方式（更安全）
+    if (!replaced) {
+        newCommand = `${original_command}（指的是：${answer}）`;
+        console.log('追加澄清说明');
+    }
+    
+    console.log('重新发送指令:', newCommand);
+    
+    // 重新发送指令
+    if (!socket || !socket.connected) {
+        initWebSocket();
+    }
+    
+    // 禁用输入
+    commandInput.disabled = true;
+    sendBtn.disabled = true;
+    sendBtnText.innerHTML = '<span class="loading"></span>';
+    
+    // 通过 WebSocket 发送执行请求
+    socket.emit('start_execution', {
+        file_id: file_id,
+        command: newCommand
+    });
 }
 
 // addProgressMessage 已移除，由 streaming.js 中的 updateStreamingMessage 替代
