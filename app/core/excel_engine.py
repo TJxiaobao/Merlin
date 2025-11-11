@@ -11,8 +11,8 @@ from typing import Dict, List, Any, Optional
 import logging
 from difflib import get_close_matches  # v0.1.0: 用于模糊匹配列名
 
-from .utils import convert_value
-from .config import config
+from ..utils.helpers import convert_value
+from ..config.settings import config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -162,12 +162,24 @@ class ExcelEngine:
             # 执行赋值
             affected_rows = mask.sum()
             if affected_rows == 0:
+                # 提供可用的值列表，帮助用户和 AI 理解为什么匹配失败
+                unique_values = self.df[condition_column].unique().tolist()
+                unique_values_str = ", ".join([f"'{v}'" for v in unique_values[:10]])  # 只显示前 10 个
+                if len(unique_values) > 10:
+                    unique_values_str += f" (还有 {len(unique_values) - 10} 个值)"
+                
                 log_msg = f"⚠️  没有找到符合条件的行 (条件: {condition_desc})"
+                suggestion = f"💡 '{condition_column}' 列的可用值: {unique_values_str}"
+                
                 logger.warning(log_msg)
+                logger.info(suggestion)
                 self.execution_log.append(log_msg)
+                self.execution_log.append(suggestion)
+                
                 return {
-                    "success": True,
-                    "message": log_msg,
+                    "success": False,  # 改为 False，因为没有匹配到任何行应该视为失败
+                    "error": log_msg,
+                    "suggestion": suggestion,
                     "affected_rows": 0
                 }
             

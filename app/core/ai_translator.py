@@ -3,16 +3,26 @@ AI翻译模块 - 将自然语言指令翻译成结构化的工具调用
 这是"大脑"，负责理解用户意图
 
 Author: TJxiaobao
-  License: MIT
-  """
+License: MIT
+Version: 0.0.6
+"""
 
 from openai import OpenAI
 from typing import List, Dict, Any, Optional
 import json
 import logging
 
-from .config import config
-from .prompts.manager import get_prompt, get_all_tools, get_tools_by_names, get_tool_groups, get_routing_config
+from ..config.settings import config
+from ..prompts.manager import get_prompt, get_all_tools, get_tools_by_names, get_tool_groups, get_routing_config
+from ..models.ai_response import (
+    AIResponse,
+    create_tool_calls_response,
+    create_clarification_response,
+    create_help_response,
+    create_friendly_message_response,
+    create_task_list_response,
+    create_error_response
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -121,16 +131,24 @@ class AITranslator:
         logger.info(f"使用所有工具：{len(all_tools)} 个")
         return all_tools
 
-    def build_system_prompt(self, headers: List[str]) -> str:
+    def build_system_prompt(self, headers: List[str], expert_type: str = None) -> str:
         """
-        构建系统提示词
+        构建系统提示词（基础信息 + 专家提示词）
         Args:
             headers: 用户表格的列名列表
+            expert_type: 专家类型（填充/数学/清洗等），如果为None则只返回基础提示词
         Returns:
             系统提示词
         """
-        # ✅ 从 YAML 加载，代码干净！
-        return get_prompt('system_prompts.main', headers=', '.join(headers))
+        # ⭐️ 使用新的通用基础提示词，说明表格列名和基本规则
+        base_prompt = get_prompt('system_prompts.general_base', headers=', '.join(headers))
+        
+        # 如果指定了专家类型，追加专家提示词
+        if expert_type:
+            expert_prompt = get_prompt(f'system_prompts.{expert_type}_expert')
+            return base_prompt + "\n\n" + expert_prompt
+        
+        return base_prompt
     
     def _is_complex_command(self, command: str) -> bool:
         """
@@ -161,12 +179,13 @@ class AITranslator:
         logger.info("⚠️  指令较长，走总指挥路径以确保准确")
         return True
     
-    def _is_contextual_command(self, command: str) -> bool:
+    def _is_contextual_command(self, command: str, history: List[Dict[str, str]] = None) -> bool:
         """
-        智能判断是否是依赖上下文的指令（包含代词等）
+        智能判断是否是依赖上下文的指令（包含代词 + 智能推断）
         
         Args:
             command: 用户输入的指令
+            history: 历史对话记录
         
         Returns:
             True 如果依赖上下文，False 如果不依赖
@@ -177,10 +196,18 @@ class AITranslator:
         
         command_lower = command.lower()
         
+        # 检查强制上下文标记（代词）
         for marker in contextual_markers:
             if marker.lower() in command_lower:
                 logger.info(f"🔍 检测到上下文依赖标记: '{marker}'")
                 return True
+        
+        # ⭐️ 智能上下文推断：如果指令包含引号，很可能在引用刚才的结果
+        import re
+        quoted_terms = re.findall(r'["""](.*?)["""]', command)
+        if quoted_terms and history and len(history) > 0:
+            logger.info(f"🧠 智能上下文推断: 指令包含引用 '{quoted_terms[0]}'，可能引用历史结果")
+            return True
         
         logger.info("✅ 未检测到上下文依赖特征")
         return False
@@ -356,7 +383,7 @@ class AITranslator:
         """
         return self._translate_single_task(user_command, headers, history)
     
-    def _translate_single_task(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+    def _translate_single_task(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> AIResponse:
         """
         翻译单个任务为工具调用（内部方法）
         
@@ -365,8 +392,9 @@ class AITranslator:
         Args:
             user_command: 用户的自然语言指令（单一任务）
             headers: 表格的列名列表
+            history: 历史对话记录
         Returns:
-            翻译结果，包含tool_calls或错误信息
+            AIResponse: 统一的响应对象
         """
         try:
             
@@ -376,12 +404,7 @@ class AITranslator:
                 logger.info("用户请求帮助信息")
                 # ✅ 从 YAML 加载，代码干净！
                 help_message = get_prompt('help_messages.main')
-                
-                return {
-                    "success": True,
-                    "is_help": True,
-                    "message": help_message
-                }
+                return create_help_response(help_message)
             
             # ⭐️ 两级路由优化 - 关键词优先，AI 兜底
             # 第一级：关键词路由（快速，0 延迟）
@@ -456,11 +479,7 @@ class AITranslator:
                 friendly_message = get_prompt('error_messages.router_failed')
                 
                 logger.info(f"AI未调用工具，返回友好提示")
-                return {
-                    "success": True,  # 改为 True，因为这不是错误，是正常的 AI 回复
-                    "is_friendly_message": True,  # 新增标记
-                    "message": friendly_message
-                }
+                return create_friendly_message_response(friendly_message)
             
             # 解析工具调用
             tool_calls = []
@@ -471,12 +490,10 @@ class AITranslator:
                 # ⭐️ 检测澄清请求
                 if function_name == "ask_clarification_question":
                     logger.info("🔍 AI 请求澄清问题")
-                    return {
-                        "success": True,
-                        "is_clarification": True,
-                        "question": function_args.get("question_to_user", ""),
-                        "options": function_args.get("ambiguous_options", [])
-                    }
+                    return create_clarification_response(
+                        question=function_args.get("question_to_user", ""),
+                        options=function_args.get("ambiguous_options", [])
+                    )
                 
                 tool_calls.append({
                     "tool_name": function_name,
@@ -486,20 +503,14 @@ class AITranslator:
                 # 使用 json.dumps 避免字典中的花括号导致格式化错误
                 logger.info(f"AI翻译结果: {function_name}({json.dumps(function_args, ensure_ascii=False)})")
             
-            return {
-                "success": True,
-                "tool_calls": tool_calls
-            }
+            return create_tool_calls_response(tool_calls)
             
         except Exception as e:
             error_msg = f"AI翻译失败: {str(e)}"
             logger.error(error_msg)
-            return {
-                "success": False,
-                "error": error_msg
-            }
+            return create_error_response(error_msg, error_code="TRANSLATION_FAILED")
     
-    def translate(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+    def translate(self, user_command: str, headers: List[str], history: List[Dict[str, str]] = None) -> List[AIResponse]:
         """
         【新】主入口：翻译用户指令为工具调用列表
         
@@ -525,7 +536,7 @@ class AITranslator:
             is_complex = self._is_complex_command(user_command)
             
             # 第二步：智能判断是否依赖上下文
-            is_contextual = self._is_contextual_command(user_command)
+            is_contextual = self._is_contextual_command(user_command, history=history)
             
             # 第三步：决策路由
             if not is_complex and not is_contextual:
@@ -565,10 +576,10 @@ class AITranslator:
             
             # 其他错误，返回错误结果
             logger.error(f"translate() 主方法失败: {e}")
-            return [{
-                "success": False,
-                "error": f"指令翻译失败: {str(e)}"
-            }]
+            return [create_error_response(
+                f"指令翻译失败: {str(e)}",
+                error_code="TRANSLATE_FAILED"
+            )]
 
 
 # 创建全局翻译器实例（延迟初始化）

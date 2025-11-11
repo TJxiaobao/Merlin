@@ -2,6 +2,7 @@
 
 **用自然语言操作 Excel，低成本、高安全、真智能**
 
+[![Version](https://img.shields.io/badge/version-0.0.6-blue.svg)](https://github.com/yourusername/merlin)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)

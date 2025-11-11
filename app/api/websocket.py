@@ -61,10 +61,17 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
     流式执行任务，实时推送进度
     这是核心函数，替代了原来的同步 execute_command
     """
-    from .excel_engine import ExcelEngine
-    from .ai_translator import get_translator
-    from .config import config
-    from app.main import engines, session_manager
+    from ..core.excel_engine import ExcelEngine
+    from ..core.ai_translator import get_translator
+    from ..config.settings import config
+    from ..models.ai_response import (
+        AIResponse,
+        AIResponseType,
+        is_tool_calls_response,
+        is_clarification_response,
+        is_error_response
+    )
+    from app.api.main import engines, session_manager
     
     try:
         # 步骤 0：开始
@@ -119,12 +126,18 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
             }, room=sid)
             return
         
-        # 如果是单任务且已翻译，直接使用
-        if isinstance(tasks, list) and len(tasks) > 0 and isinstance(tasks[0], dict):
-            # 已经是翻译结果
+        # ⚠️ 注意：translate() 现在返回 List[AIResponse]，不是字符串列表
+        # 检查返回的是否已经是 AIResponse 对象
+        from ..models.ai_response import AIResponse
+        
+        if isinstance(tasks, list) and len(tasks) > 0 and isinstance(tasks[0], AIResponse):
+            # 已经是翻译结果（List[AIResponse]）
             translation_results = tasks
+            logger.info(f"✅ 直接翻译模式，共 {len(tasks)} 个结果")
         else:
-            # 是子任务列表，需要逐个翻译
+            # 这个分支应该不会被执行了，因为 translate() 总是返回 List[AIResponse]
+            # 但为了兼容，保留这个逻辑
+            logger.warning(f"⚠️  意外的返回类型: {type(tasks[0]) if tasks else 'empty'}")
             total_tasks = len(tasks)
             await sio.emit('progress', {
                 'type': 'translation_done',
@@ -155,10 +168,11 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                                 'remaining': remaining - 5
                             }, room=sid)
                 
-                # 翻译当前子任务
+                # 翻译当前子任务（注意：task 已经是字符串）
+                task_preview = task[:30] if len(task) > 30 else task
                 await sio.emit('progress', {
                     'type': 'translating_subtask',
-                    'message': f'🤖 正在翻译任务 {i}/{total_tasks}: {task[:30]}...',
+                    'message': f'🤖 正在翻译任务 {i}/{total_tasks}: {task_preview}...',
                     'task_index': i,
                     'total_tasks': total_tasks
                 }, room=sid)
@@ -167,10 +181,9 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                 translation_results.append(result)
                 
                 # ⭐️ 立即显示翻译结果
-                if result.get("success"):
-                    tool_calls = result.get("tool_calls", [])
-                    if tool_calls:
-                        tool_desc = tool_calls[0].get("tool_name", "未知工具")
+                if result.success:
+                    if is_tool_calls_response(result) and result.tool_calls:
+                        tool_desc = result.tool_calls[0].tool_name
                         await sio.emit('progress', {
                             'type': 'subtask_translated',
                             'message': f'✅ 任务 {i} 翻译完成 → 使用工具: {tool_desc}',
@@ -179,7 +192,7 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                 else:
                     await sio.emit('progress', {
                         'type': 'subtask_translate_failed',
-                        'message': f'❌ 任务 {i} 翻译失败: {result.get("error", "未知错误")}',
+                        'message': f'❌ 任务 {i} 翻译失败: {result.error or "未知错误"}',
                         'task_index': i
                     }, room=sid)
                 
@@ -204,8 +217,8 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
             
             try:
                 # 检查翻译是否成功
-                if not translation_result.get("success"):
-                    error_msg = translation_result.get("error", "未知错误")
+                if not translation_result.success:
+                    error_msg = translation_result.error or "未知错误"
                     execution_log.append(f"❌ 任务 {task_idx} 翻译失败: {error_msg}")
                     
                     await sio.emit('progress', {
@@ -228,8 +241,8 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                     break  # 停止执行后续任务
                 
                 # 检查是否是友好提示消息
-                if translation_result.get("is_friendly_message"):
-                    message = translation_result.get("message", "")
+                if translation_result.response_type == AIResponseType.FRIENDLY_MESSAGE:
+                    message = translation_result.message or ""
                     execution_log.append(message)
                     await sio.emit('progress', {
                         'type': 'info',
@@ -238,8 +251,8 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                     continue
                 
                 # 检查是否是帮助指令
-                if translation_result.get("is_help"):
-                    message = translation_result.get("message", "")
+                if translation_result.response_type == AIResponseType.HELP:
+                    message = translation_result.message or ""
                     execution_log.append(message)
                     await sio.emit('progress', {
                         'type': 'help',
@@ -248,17 +261,15 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                     continue
                 
                 # ⭐️ 检查是否是澄清请求
-                if translation_result.get("is_clarification"):
-                    question = translation_result.get("question", "")
-                    options = translation_result.get("options", [])
-                    
-                    logger.info(f"🔍 收到澄清请求: {question}")
-                    logger.info(f"   选项: {options}")
+                if is_clarification_response(translation_result):
+                    clarification = translation_result.clarification
+                    logger.info(f"🔍 收到澄清请求: {clarification.question}")
+                    logger.info(f"   选项: {clarification.options}")
                     
                     await sio.emit('progress', {
                         'type': 'clarify',
-                        'question': question,
-                        'options': options,
+                        'question': clarification.question,
+                        'options': clarification.options,
                         'file_id': file_id,
                         'original_command': command
                     }, room=sid)
@@ -267,14 +278,13 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                     return
                 
                 # 执行工具调用
-                tool_calls = translation_result.get("tool_calls", [])
-                if not tool_calls:
+                if not is_tool_calls_response(translation_result) or not translation_result.tool_calls:
                     logger.warning(f"任务 {task_idx} 没有工具调用")
                     continue
                 
-                for tool_call in tool_calls:
-                    tool_name = tool_call["tool_name"]
-                    parameters = tool_call["parameters"]
+                for tool_call in translation_result.tool_calls:
+                    tool_name = tool_call.tool_name
+                    parameters = tool_call.parameters
                     
                     logger.info(f"执行工具: {tool_name} with {json.dumps(parameters, ensure_ascii=False)}")
                     

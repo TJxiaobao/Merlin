@@ -9,7 +9,7 @@ echo "版本: v0.1.0-alpha (Vite 架构)"
 echo ""
 
 # 检查是否在项目根目录
-if [ ! -f "app/main.py" ]; then
+if [ ! -f "app/api/main.py" ]; then
     echo "❌ 错误：请在项目根目录运行此脚本"
     exit 1
 fi

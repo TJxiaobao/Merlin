@@ -22,8 +22,8 @@ load_dotenv()
 # 确保能导入app模块
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.excel_engine import ExcelEngine
-from app.ai_translator import AITranslator
+from app.core.excel_engine import ExcelEngine
+from app.core.ai_translator import AITranslator
 import os
 
 

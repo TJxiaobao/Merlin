@@ -15,13 +15,20 @@ from typing import Dict
 import logging
 import os
 
-from .excel_engine import ExcelEngine
-from .ai_translator import get_translator
-from .schemas import ExecuteCommandRequest, ExecuteCommandResponse, UploadFileResponse
-from .config import config
-from .utils import validate_file_extension
-from .prompts import manager as prompt_manager
-from .session_manager import SessionManager
+from ..core.excel_engine import ExcelEngine
+from ..core.ai_translator import get_translator
+from ..models.schemas import ExecuteCommandRequest, ExecuteCommandResponse, UploadFileResponse
+from ..config.settings import config
+from ..models.ai_response import (
+    AIResponse,
+    AIResponseType,
+    is_tool_calls_response,
+    is_clarification_response,
+    is_error_response
+)
+from ..utils.helpers import validate_file_extension
+from ..prompts import manager as prompt_manager
+from ..services.session_manager import SessionManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +37,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Merlin - AI Excel助手",
     description="通过自然语言指令操作Excel表格",
-    version="0.1.0"
+    version="0.0.6"
 )
 
 # 添加CORS支持（方便前端调用）
@@ -87,7 +94,7 @@ async def root():
         return {
             "status": "ok",
             "message": "Merlin AI Excel 助手运行中",
-            "version": "0.0.5",
+            "version": "0.0.6",
             "error": "前端文件未找到"
         }
 
@@ -97,7 +104,7 @@ async def health():
     return {
         "message": "Merlin AI Excel助手运行中",
         "status": "ok",
-        "version": "0.1.0"
+        "version": "0.0.6"
     }
 
 
@@ -186,9 +193,9 @@ async def execute_command(request: ExecuteCommandRequest):
             logger.info(f"执行第 {task_idx}/{len(translation_results)} 个任务")
             
             # 检查翻译是否成功
-            if not translation_result.get("success"):
+            if not translation_result.success:
                 all_success = False
-                error_msg = translation_result.get("error", "未知错误")
+                error_msg = translation_result.error or "未知错误"
                 execution_log.append(f"❌ 任务 {task_idx} 翻译失败: {error_msg}")
                 
                 # ⭐️ 方案A：提示前面的任务已保存
@@ -199,41 +206,38 @@ async def execute_command(request: ExecuteCommandRequest):
                 break  # 遇到错误，停止执行后续任务
             
             # 检查是否是友好提示消息
-            if translation_result.get("is_friendly_message"):
-                execution_log.append(translation_result.get("message", ""))
+            if translation_result.response_type == AIResponseType.FRIENDLY_MESSAGE:
+                execution_log.append(translation_result.message or "")
                 continue
             
             # 检查是否是帮助指令
-            if translation_result.get("is_help"):
-                execution_log.append(translation_result.get("message", ""))
+            if translation_result.response_type == AIResponseType.HELP:
+                execution_log.append(translation_result.message or "")
                 continue
             
             # ⭐️ 检查是否是澄清请求
-            if translation_result.get("is_clarification"):
-                question = translation_result.get("question", "")
-                options = translation_result.get("options", [])
-                
-                logger.info(f"🔍 收到澄清请求: {question}")
-                logger.info(f"   选项: {options}")
+            if is_clarification_response(translation_result):
+                clarification = translation_result.clarification
+                logger.info(f"🔍 收到澄清请求: {clarification.question}")
+                logger.info(f"   选项: {clarification.options}")
                 
                 return ExecuteCommandResponse(
                     success=True,
                     message="需要澄清",
                     execution_log=[],
                     is_clarification=True,
-                    clarification_question=question,
-                    clarification_options=options
+                    clarification_question=clarification.question,
+                    clarification_options=clarification.options
                 )
             
             # 执行工具调用
-            tool_calls = translation_result.get("tool_calls", [])
-            if not tool_calls:
+            if not is_tool_calls_response(translation_result) or not translation_result.tool_calls:
                 logger.warning(f"任务 {task_idx} 没有工具调用")
                 continue
             
-            for tool_call in tool_calls:
-                tool_name = tool_call["tool_name"]
-                parameters = tool_call["parameters"]
+            for tool_call in translation_result.tool_calls:
+                tool_name = tool_call.tool_name
+                parameters = tool_call.parameters
                 
                 # 使用 json.dumps 避免字典中的花括号导致格式化错误
                 logger.info(f"执行工具: {tool_name} with {json.dumps(parameters, ensure_ascii=False)}")
