@@ -50,12 +50,26 @@ app.add_middleware(
 )
 
 # 挂载前端静态文件
-frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-if os.path.exists(frontend_path):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
-    logger.info(f"✅ 静态文件路径已挂载: {frontend_path}")
+# 支持两种环境：
+# 1. 本地开发：app/api/../../frontend/dist (需要回退两级到项目根目录)
+# 2. Docker 容器：/app/frontend/dist
+frontend_path_dev = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+frontend_path_docker = "/app/frontend/dist"
+
+# 优先尝试 Docker 路径，然后是开发路径
+if os.path.exists(frontend_path_docker):
+    frontend_path = frontend_path_docker
+    logger.info(f"✅ 使用 Docker 前端路径: {frontend_path}")
+elif os.path.exists(frontend_path_dev):
+    frontend_path = frontend_path_dev
+    logger.info(f"✅ 使用本地开发前端路径: {frontend_path}")
 else:
-    logger.warning(f"⚠️ 前端目录不存在: {frontend_path}")
+    frontend_path = None
+    logger.warning(f"⚠️ 前端目录不存在:\n   Docker: {frontend_path_docker}\n   Dev: {frontend_path_dev}")
+
+if frontend_path:
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+    logger.info(f"✅ 静态文件已挂载: {frontend_path}/assets")
 
 # 全局存储：文件ID -> ExcelEngine实例
 engines: Dict[str, ExcelEngine] = {}
@@ -87,15 +101,22 @@ async def startup_event():
 @app.get("/")
 async def root():
     """返回前端页面"""
-    frontend_index = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist", "index.html")
-    if os.path.exists(frontend_index):
-        return FileResponse(frontend_index)
+    # 支持两种环境：本地开发和 Docker 容器
+    # 本地开发需要回退两级：app/api/../../frontend/dist/index.html
+    frontend_index_dev = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist", "index.html")
+    frontend_index_docker = "/app/frontend/dist/index.html"
+    
+    # 优先尝试 Docker 路径
+    if os.path.exists(frontend_index_docker):
+        return FileResponse(frontend_index_docker)
+    elif os.path.exists(frontend_index_dev):
+        return FileResponse(frontend_index_dev)
     else:
         return {
             "status": "ok",
             "message": "Merlin AI Excel 助手运行中",
             "version": "0.0.6",
-            "error": "前端文件未找到"
+            "error": f"前端文件未找到 - Docker: {frontend_index_docker}, Dev: {frontend_index_dev}"
         }
 
 @app.get("/health")
