@@ -181,7 +181,7 @@ class AITranslator:
     
     def _is_contextual_command(self, command: str, history: List[Dict[str, str]] = None) -> bool:
         """
-        智能判断是否是依赖上下文的指令（包含代词 + 智能推断）
+        智能判断是否是依赖上下文的指令（增强版）
         
         Args:
             command: 用户输入的指令
@@ -196,20 +196,33 @@ class AITranslator:
         
         command_lower = command.lower()
         
-        # 检查强制上下文标记（代词）
+        # 1. 检查强制上下文标记（代词）
         for marker in contextual_markers:
             if marker.lower() in command_lower:
                 logger.info(f"🔍 检测到上下文依赖标记: '{marker}'")
                 return True
         
-        # ⭐️ 智能上下文推断：如果指令包含引号，很可能在引用刚才的结果
+        # 2. ⭐️ 新增：延续性词汇检测
+        continuation_markers = ["也", "还", "再", "同样", "一样", "继续", "接着", "另外", "同时"]
+        for marker in continuation_markers:
+            if marker in command:
+                logger.info(f"🔍 检测到延续性词汇: '{marker}'")
+                return True
+        
+        # 3. ⭐️ 智能上下文推断：如果指令包含引号，很可能在引用刚才的结果
         import re
         quoted_terms = re.findall(r'["""](.*?)["""]', command)
         if quoted_terms and history and len(history) > 0:
             logger.info(f"🧠 智能上下文推断: 指令包含引用 '{quoted_terms[0]}'，可能引用历史结果")
             return True
         
-        logger.info("✅ 未检测到上下文依赖特征")
+        # 4. ⭐️ 新增：短指令倾向检测（指令很短时，更可能依赖上下文）
+        # 阈值设为7：像"改为10"（4字符）会被判为依赖上下文，但"把税率设为0.13"（9字符）不会
+        if len(command) < 7 and history and len(history) > 0:
+            logger.info(f"🧠 短指令检测: 指令长度 {len(command)} < 7，倾向携带上下文")
+            return True
+        
+        logger.info("✅ 未检测到明显上下文依赖特征")
         return False
     
     def _call_coordinator(self, command: str, history: List[Dict[str, str]] = None) -> Optional[List[str]]:
@@ -472,38 +485,8 @@ class AITranslator:
                 logger.info(f"Content: {message.content}")
             logger.info("=" * 60)
             
-            # 检查AI是否调用了工具
-            if not message.tool_calls:
-                # AI没有调用工具，返回友好提示而不是错误
-                # ✅ 从 YAML 加载，代码干净！
-                friendly_message = get_prompt('error_messages.router_failed')
-                
-                logger.info(f"AI未调用工具，返回友好提示")
-                return create_friendly_message_response(friendly_message)
-            
-            # 解析工具调用
-            tool_calls = []
-            for tool_call in message.tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-                
-                # ⭐️ 检测澄清请求
-                if function_name == "ask_clarification_question":
-                    logger.info("🔍 AI 请求澄清问题")
-                    return create_clarification_response(
-                        question=function_args.get("question_to_user", ""),
-                        options=function_args.get("ambiguous_options", [])
-                    )
-                
-                tool_calls.append({
-                    "tool_name": function_name,
-                    "parameters": function_args
-                })
-                
-                # 使用 json.dumps 避免字典中的花括号导致格式化错误
-                logger.info(f"AI翻译结果: {function_name}({json.dumps(function_args, ensure_ascii=False)})")
-            
-            return create_tool_calls_response(tool_calls)
+            # ⭐️ 使用统一的转换器（方案3优化）
+            return AIResponse.from_openai_response(message)
             
         except Exception as e:
             error_msg = f"AI翻译失败: {str(e)}"
@@ -540,14 +523,22 @@ class AITranslator:
             
             # 第三步：决策路由
             if not is_complex and not is_contextual:
-                # 【路径 A】真·简单指令（无上下文依赖）
-                logger.info("🚀 【路径 A】简单指令 + 无上下文，直接翻译（不带 history）")
-                result = self._translate_single_task(user_command, headers, history=None)
+                # 【路径 A】简单指令 + 无明显上下文依赖
+                # ⭐️ 优化：携带最近1轮历史（而不是全部历史），提高准确性且控制 Token
+                recent_history = history[-2:] if history and len(history) >= 2 else history
+                
+                # 改进日志：即使是空历史也要说明策略
+                if recent_history and len(recent_history) > 0:
+                    logger.info(f"🚀 【路径 A】简单指令，携带最近1轮历史（共{len(recent_history)}条消息）")
+                else:
+                    logger.info("🚀 【路径 A】简单指令（首次请求，无历史）→ 后续将自动携带最近1轮")
+                
+                result = self._translate_single_task(user_command, headers, history=recent_history)
                 return [result]
             
             elif not is_complex and is_contextual:
                 # 【路径 B】简单但依赖上下文的指令（如"把它们改为0.1"）
-                logger.info("🧠 【路径 B】简单指令 + 依赖上下文，直接翻译（带 history）")
+                logger.info(f"🧠 【路径 B】简单指令 + 明显依赖上下文，直接翻译（带完整 history，共{len(history) if history else 0}条）")
                 result = self._translate_single_task(user_command, headers, history=history)
                 return [result]
             

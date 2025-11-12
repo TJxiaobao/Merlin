@@ -6,10 +6,13 @@ Author: TJxiaobao
 License: MIT
 Version: 0.0.6
 """
-
+import json
+import logging
 from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class AIResponseType(str, Enum):
@@ -133,19 +136,88 @@ class AIResponse(BaseModel):
                 }
             ]
         }
+    
+    @classmethod
+    def from_openai_response(cls, message, error_messages: Dict[str, str] = None) -> 'AIResponse':
+        """
+        从 OpenAI/Moonshot 的 Function Calling 响应创建 AIResponse
+        统一转换逻辑，避免代码重复
+        
+        Args:
+            message: OpenAI message 对象（包含 tool_calls 和 content）
+            error_messages: 错误消息字典（用于加载 YAML 提示词）
+        
+        Returns:
+            AIResponse 对象
+        """
+        try:
+            # 情况1: AI 没有调用工具 → 友好提示
+            if not message.tool_calls:
+                content = message.content or "AI 未返回有效响应"
+                logger.info(f"AI 未调用工具，返回友好提示")
+                return create_friendly_message_response(content)
+            
+            # 情况2: 检查是否是澄清请求
+            first_tool = message.tool_calls[0]
+            if first_tool.function.name == "ask_clarification_question":
+                args = json.loads(first_tool.function.arguments)
+                logger.info(f"🔍 AI 请求澄清: {args.get('question_to_user', '')}")
+                return create_clarification_response(
+                    question=args.get("question_to_user", ""),
+                    options=args.get("ambiguous_options", [])
+                )
+            
+            # 情况3: 正常工具调用 → 解析为 ToolCall Pydantic 对象
+            tool_calls = []
+            for tc in message.tool_calls:
+                tool_name = tc.function.name
+                parameters = json.loads(tc.function.arguments)
+                
+                # 直接使用 tool_name 和 parameters 创建 ToolCall 对象
+                tool_call = ToolCall(
+                    tool_name=tool_name,
+                    parameters=parameters
+                )
+                tool_calls.append(tool_call)
+                
+                # 日志输出
+                logger.info(f"AI 翻译结果: {tool_name}({json.dumps(parameters, ensure_ascii=False)})")
+            
+            return create_tool_calls_response(tool_calls)
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"⚠️ JSON 解析失败: {e}")
+            return create_error_response(
+                f"AI 响应格式错误: {str(e)}",
+                error_code="JSON_PARSE_ERROR"
+            )
+        except Exception as e:
+            logger.error(f"⚠️ 转换 AI 响应失败: {e}")
+            return create_error_response(
+                f"AI 响应转换失败: {str(e)}",
+                error_code="RESPONSE_CONVERSION_ERROR"
+            )
 
 
 # 便捷构造函数
 
 def create_tool_calls_response(
-    tool_calls: List[Dict[str, Any]],
+    tool_calls: List[ToolCall],
     metadata: Optional[Dict[str, Any]] = None
 ) -> AIResponse:
-    """创建工具调用响应"""
+    """创建工具调用响应
+    
+    Args:
+        tool_calls: ToolCall 对象列表（而非字典列表）
+        metadata: 可选的元数据
+    
+    Returns:
+        AIResponse 对象
+    """
     return AIResponse(
         success=True,
         response_type=AIResponseType.TOOL_CALLS,
-        tool_calls=[ToolCall(**tc) for tc in tool_calls],
+        tool_calls=tool_calls,  # 直接使用 ToolCall 对象列表
         metadata=metadata or {}
     )
 

@@ -5,25 +5,6 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
 
-class ExecuteCommandRequest(BaseModel):
-    """执行指令请求"""
-    file_id: str
-    command: str  # 用户的自然语言指令
-
-
-class ExecuteCommandResponse(BaseModel):
-    """执行指令响应"""
-    success: bool
-    message: str
-    execution_log: List[str]
-    download_url: Optional[str] = None
-    error: Optional[str] = None
-    # ⭐️ 澄清相关字段
-    is_clarification: Optional[bool] = False
-    clarification_question: Optional[str] = None
-    clarification_options: Optional[List[str]] = None
-
-
 class UploadFileResponse(BaseModel):
     """上传文件响应"""
     success: bool

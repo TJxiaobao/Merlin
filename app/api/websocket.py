@@ -126,77 +126,22 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
             }, room=sid)
             return
         
-        # ⚠️ 注意：translate() 现在返回 List[AIResponse]，不是字符串列表
+        # 注意：translate() 现在返回 List[AIResponse]，不是字符串列表
         # 检查返回的是否已经是 AIResponse 对象
         from ..models.ai_response import AIResponse
         
-        if isinstance(tasks, list) and len(tasks) > 0 and isinstance(tasks[0], AIResponse):
-            # 已经是翻译结果（List[AIResponse]）
-            translation_results = tasks
-            logger.info(f"✅ 直接翻译模式，共 {len(tasks)} 个结果")
-        else:
-            # 这个分支应该不会被执行了，因为 translate() 总是返回 List[AIResponse]
-            # 但为了兼容，保留这个逻辑
-            logger.warning(f"⚠️  意外的返回类型: {type(tasks[0]) if tasks else 'empty'}")
-            total_tasks = len(tasks)
+        # translate() 现在总是返回 List[AIResponse]
+        if not isinstance(tasks, list) or len(tasks) == 0 or not isinstance(tasks[0], AIResponse):
+            logger.error(f"⚠️  translate() 返回了意外的类型: {type(tasks[0]) if tasks else 'empty'}")
             await sio.emit('progress', {
-                'type': 'translation_done',
-                'message': f'✅ 指令拆分完成，共 {total_tasks} 个任务',
-                'total_tasks': total_tasks
+                'type': 'error',
+                'message': '❌ AI 翻译返回格式错误'
             }, room=sid)
-            await asyncio.sleep(0.3)
-            
-            # ⭐️ 逐个翻译子任务，实时显示进度
-            translation_results = []
-            for i, task in enumerate(tasks, 1):
-                # 如果不是第一个任务，等待21秒避免RPM限制
-                if i > 1:
-                    wait_time = 21
-                    await sio.emit('progress', {
-                        'type': 'api_cooldown',
-                        'message': f'⏳ 等待 {wait_time} 秒避免 API 限流...',
-                        'remaining': wait_time
-                    }, room=sid)
-                    
-                    # 倒计时（每5秒更新）
-                    for remaining in range(wait_time, 0, -5):
-                        await asyncio.sleep(5)
-                        if remaining > 5:
-                            await sio.emit('progress', {
-                                'type': 'api_cooldown_update',
-                                'message': f'⏳ 还剩 {remaining - 5} 秒...',
-                                'remaining': remaining - 5
-                            }, room=sid)
-                
-                # 翻译当前子任务（注意：task 已经是字符串）
-                task_preview = task[:30] if len(task) > 30 else task
-                await sio.emit('progress', {
-                    'type': 'translating_subtask',
-                    'message': f'🤖 正在翻译任务 {i}/{total_tasks}: {task_preview}...',
-                    'task_index': i,
-                    'total_tasks': total_tasks
-                }, room=sid)
-                
-                result = translator.translate_single_task(task, engine.get_headers(), history=current_history)
-                translation_results.append(result)
-                
-                # ⭐️ 立即显示翻译结果
-                if result.success:
-                    if is_tool_calls_response(result) and result.tool_calls:
-                        tool_desc = result.tool_calls[0].tool_name
-                        await sio.emit('progress', {
-                            'type': 'subtask_translated',
-                            'message': f'✅ 任务 {i} 翻译完成 → 使用工具: {tool_desc}',
-                            'task_index': i
-                        }, room=sid)
-                else:
-                    await sio.emit('progress', {
-                        'type': 'subtask_translate_failed',
-                        'message': f'❌ 任务 {i} 翻译失败: {result.error or "未知错误"}',
-                        'task_index': i
-                    }, room=sid)
-                
-                await asyncio.sleep(0.2)
+            return
+        
+        # 已经是翻译结果（List[AIResponse]）
+        translation_results = tasks
+        logger.info(f"✅ 收到 {len(translation_results)} 个翻译结果")
         
         total_tasks = len(translation_results)
         
@@ -299,6 +244,20 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                         }, room=sid)
                         execution_log.append(result["message"])
                         
+                        # ⭐️ 标记为成功（即使是分析类工具也要记录）
+                        last_successful_task_idx = task_idx
+                        
+                        # ⭐️ 保存历史记录（分析类工具也需要保存历史）
+                        success_logs = [log for log in execution_log if "✅" in log or "成功" in log or "📊" in log]
+                        assistant_summary = " ".join(success_logs) if success_logs else result["message"]
+                        
+                        logger.info(f"💾 保存历史记录（分析类工具）: user='{command[:30]}...', assistant='{assistant_summary[:50]}...'")
+                        session_manager.update_history(
+                            file_id=file_id,
+                            user_msg=command,
+                            assistant_msg=assistant_summary
+                        )
+                        
                         # 分析类工具完成后立即结束
                         await sio.emit('progress', {
                             'type': 'done',
@@ -397,10 +356,13 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                 logger.info(f"✅ 直接保存当前状态为最终文件")
         
         # 步骤 4：保存历史
+        logger.info(f"🔍 检查是否保存历史: last_successful_task_idx={last_successful_task_idx}, all_success={all_success}")
         if last_successful_task_idx > 0:
             # 构造成功日志摘要
             success_logs = [log for log in execution_log if "✅" in log or "成功" in log]
             assistant_summary = " ".join(success_logs) if success_logs else "操作成功完成"
+            
+            logger.info(f"💾 保存历史记录: user='{command[:30]}...', assistant='{assistant_summary[:50]}...'")
             
             # 更新会话历史
             session_manager.update_history(
@@ -408,6 +370,8 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
                 user_msg=command,
                 assistant_msg=assistant_summary
             )
+        else:
+            logger.warning(f"⚠️ 未保存历史：没有成功执行的任务 (last_successful_task_idx={last_successful_task_idx})")
         
         # 步骤 5：完成
         success_message = '🎉 所有任务已完成！' if all_success else f'⚠️ 部分任务执行失败'

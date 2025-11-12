@@ -9,8 +9,6 @@ Version: 0.0.6
 
 from .schemas import (
     UploadFileResponse,
-    ExecuteCommandRequest,
-    ExecuteCommandResponse
 )
 from .ai_response import (
     AIResponse,
@@ -32,8 +30,6 @@ from .ai_response import (
 __all__ = [
     # schemas
     "UploadFileResponse",
-    "ExecuteCommandRequest",
-    "ExecuteCommandResponse",
     # ai_response
     "AIResponse",
     "AIResponseType",
