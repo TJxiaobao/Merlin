@@ -218,6 +218,7 @@ class AITranslator:
         
         # 4. ⭐️ 新增：短指令倾向检测（指令很短时，更可能依赖上下文）
         # 阈值设为7：像"改为10"（4字符）会被判为依赖上下文，但"把税率设为0.13"（9字符）不会
+        # todo 过于生硬
         if len(command) < 7 and history and len(history) > 0:
             logger.info(f"🧠 短指令检测: 指令长度 {len(command)} < 7，倾向携带上下文")
             return True
@@ -555,7 +556,8 @@ class AITranslator:
                 
                 # ⭐️ 返回子任务列表，让上层（WebSocket）控制翻译节奏和实时显示
                 logger.info(f"🔄 已拆分为 {len(tasks)} 个子任务")
-                return tasks  # 返回任务列表，而不是翻译结果
+                from ..models.ai_response import create_task_list_response
+                return [create_task_list_response(tasks)]  # 返回包含任务列表的 AIResponse
             
         except Exception as e:
             error_str = str(e)

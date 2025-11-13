@@ -244,6 +244,67 @@ class ExcelEngine:
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
     
+    def add_column(self, column_name: str, default_value: Any = None) -> Dict:
+        """
+        新增列
+        Args:
+            column_name: 新列名
+            default_value: 默认值（可选，默认为空）
+        Returns:
+            执行结果
+        """
+        if column_name in self.df.columns:
+            return {"success": False, "error": f"列'{column_name}'已存在"}
+        
+        try:
+            # 添加新列，默认值为 None 或用户指定的值
+            converted_value = self._convert_value(default_value) if default_value is not None else None
+            self.df[column_name] = converted_value
+            
+            log_msg = f"✅ 已新增列'{column_name}'"
+            if default_value is not None:
+                log_msg += f"，默认值：{default_value}"
+            
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            return {
+                "success": True,
+                "message": log_msg,
+                "column_name": column_name,
+                "default_value": default_value
+            }
+        except Exception as e:
+            error_msg = f"新增列失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
+    def delete_column(self, column_name: str) -> Dict:
+        """
+        删除列
+        Args:
+            column_name: 要删除的列名
+        Returns:
+            执行结果
+        """
+        if column_name not in self.df.columns:
+            return self._generate_column_not_found_error(column_name)
+        
+        try:
+            self.df = self.df.drop(columns=[column_name])
+            
+            log_msg = f"✅ 已删除列'{column_name}'"
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            return {
+                "success": True,
+                "message": log_msg,
+                "column_name": column_name
+            }
+        except Exception as e:
+            error_msg = f"删除列失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+    
     def set_by_mapping(
         self,
         condition_column: str,
@@ -1124,6 +1185,10 @@ class ExcelEngine:
             return self.drop_duplicates(**parameters)
         elif tool_name == "sort_by_column":
             return self.sort_by_column(**parameters)
+        elif tool_name == "add_column":
+            return self.add_column(**parameters)
+        elif tool_name == "delete_column":
+            return self.delete_column(**parameters)
         else:
             return {
                 "success": False,
@@ -1149,5 +1214,7 @@ TOOL_FUNCTIONS = {
     "change_case": ExcelEngine.change_case,                  # v0.0.4-beta
     "drop_duplicates": ExcelEngine.drop_duplicates,          # v0.0.4-beta
     "sort_by_column": ExcelEngine.sort_by_column,            # v0.0.4-beta
+    "add_column": ExcelEngine.add_column,                    # v0.0.6
+    "delete_column": ExcelEngine.delete_column,                # v0.0.6
 }
 

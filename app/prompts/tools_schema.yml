@@ -95,6 +95,20 @@ tool_groups:
       - extract_date_part
       - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
 
+  column:
+    keywords:
+      - 新增
+      - 添加列
+      - 创建列
+      - 增加列
+      - 删除列
+      - 移除列
+      - 去掉列
+    tools:
+      - add_column
+      - delete_column
+      - ask_clarification_question  # ⭐️ 所有组都需要澄清工具
+
   structure:
     keywords:
       - 删除重复
@@ -170,6 +184,14 @@ router_tools:
     function:
       name: route_to_cleaning
       description: 路由到【清洗专家】- 处理数据清洗、去空格、填充缺失值、去重等操作
+      parameters:
+        type: object
+        properties: {}
+  
+  - type: function
+    function:
+      name: route_to_column
+      description: 路由到【列操作专家】- 处理新增列、删除列等列结构操作
       parameters:
         type: object
         properties: {}
@@ -277,6 +299,35 @@ tools:
         required:
           - source_column
           - target_column
+
+  - type: function
+    function:
+      name: add_column
+      description: 新增一列，可以指定默认值。适用场景：用户需要创建新列。例如：'新增一列叫含税单价'、'添加商品平均价列，默认值为0'
+      parameters:
+        type: object
+        properties:
+          column_name:
+            type: string
+            description: 新列的名称
+          default_value:
+            type: string
+            description: 默认值（可选），如果不指定则为空
+        required:
+          - column_name
+
+  - type: function
+    function:
+      name: delete_column
+      description: 删除指定的列。适用场景：用户需要删除不需要的列。例如：'删除备注列'、'移除故障列'
+      parameters:
+        type: object
+        properties:
+          column_name:
+            type: string
+            description: 要删除的列名
+        required:
+          - column_name
 
   - type: function
     function:

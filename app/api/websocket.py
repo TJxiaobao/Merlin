@@ -128,7 +128,7 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
         
         # 注意：translate() 现在返回 List[AIResponse]，不是字符串列表
         # 检查返回的是否已经是 AIResponse 对象
-        from ..models.ai_response import AIResponse
+        from ..models.ai_response import AIResponse, is_task_list_response
         
         # translate() 现在总是返回 List[AIResponse]
         if not isinstance(tasks, list) or len(tasks) == 0 or not isinstance(tasks[0], AIResponse):
@@ -139,9 +139,158 @@ async def execute_with_streaming(sid: str, file_id: str, command: str):
             }, room=sid)
             return
         
-        # 已经是翻译结果（List[AIResponse]）
-        translation_results = tasks
-        logger.info(f"✅ 收到 {len(translation_results)} 个翻译结果")
+        # 如果是任务列表，需要逐个翻译
+        if len(tasks) == 1 and is_task_list_response(tasks[0]):
+            logger.info(f"📋 检测到任务列表，需要逐个翻译")
+            task_list = tasks[0].task_list
+            
+            await sio.emit('progress', {
+                'type': 'task_split',
+                'message': f'📋 任务已拆分为 {len(task_list)} 个子任务',
+                'total_tasks': len(task_list)
+            }, room=sid)
+            
+            # ⭐️ 保存初始历史（上一个会话的历史）
+            initial_history = session_manager.get_history(file_id)
+            logger.info(f"📚 初始历史记录（上一个会话）: {len(initial_history)} 条消息")
+            
+            # 逐个翻译和执行子任务（边翻译边执行，以便携带历史）
+            execution_log = []
+            last_successful_task_idx = 0
+            all_success = True
+            
+            for i, subtask in enumerate(task_list, 1):
+                # ⭐️ 构建历史：初始历史 + 上一个子任务的结果
+                # 如果 i > 1，获取最新历史（包含上一个子任务的结果）
+                if i > 1:
+                    # 获取最新历史（包含上一个子任务的结果）
+                    current_history = session_manager.get_history(file_id)
+                    logger.info(f"📚 任务 {i} 翻译时携带历史: {len(current_history)} 条消息（初始历史 + 前 {i-1} 个子任务）")
+                else:
+                    # 第一个任务只携带初始历史（上一个会话的历史）
+                    current_history = initial_history
+                    logger.info(f"📚 任务 1 翻译时携带初始历史: {len(current_history)} 条消息（上一个会话）")
+                
+                await sio.emit('progress', {
+                    'type': 'translating_subtask',
+                    'message': f'🤖 正在翻译任务 {i}/{len(task_list)}: {subtask[:30]}...',
+                    'task_index': i,
+                    'total_tasks': len(task_list)
+                }, room=sid)
+                
+                # ⭐️ 翻译子任务（携带历史：初始历史 + 上一个子任务的结果）
+                result = translator.translate(
+                    user_command=subtask,
+                    headers=engine.get_headers(),
+                    history=current_history  # ✅ 携带历史
+                )
+                
+                if not result or len(result) == 0:
+                    logger.warning(f"任务 {i} 翻译返回空结果")
+                    all_success = False
+                    continue
+                
+                translation_result = result[0]
+                
+                if not translation_result.success:
+                    await sio.emit('progress', {
+                        'type': 'subtask_translate_failed',
+                        'message': f'❌ 任务 {i} 翻译失败: {translation_result.error or "未知错误"}',
+                        'task_index': i
+                    }, room=sid)
+                    all_success = False
+                    break
+                
+                await sio.emit('progress', {
+                    'type': 'subtask_translated',
+                    'message': f'✅ 任务 {i} 翻译完成',
+                    'task_index': i
+                }, room=sid)
+                
+                # ⭐️ 立即执行当前任务
+                await sio.emit('progress', {
+                    'type': 'task_start',
+                    'message': f'⏳ 正在执行任务 {i}/{len(task_list)}...',
+                    'task_index': i,
+                    'total_tasks': len(task_list)
+                }, room=sid)
+                
+                # 执行工具调用
+                if is_tool_calls_response(translation_result) and translation_result.tool_calls:
+                    for tool_call in translation_result.tool_calls:
+                        tool_name = tool_call.tool_name
+                        parameters = tool_call.parameters
+                        
+                        logger.info(f"执行工具: {tool_name} with {json.dumps(parameters, ensure_ascii=False)}")
+                        
+                        result = engine.execute_tool(tool_name, parameters)
+                        
+                        if result.get("success"):
+                            log_msg = result.get("message", f"✅ 任务 {i} 执行成功")
+                            execution_log.append(log_msg)
+                            last_successful_task_idx = i
+                            
+                            await sio.emit('progress', {
+                                'type': 'task_success',
+                                'message': log_msg,
+                                'task_index': i
+                            }, room=sid)
+                            
+                            # ⭐️ 立即保存历史记录（让下一个任务可以携带）
+                            assistant_summary = log_msg  # 只保存当前任务的执行结果
+                            
+                            logger.info(f"💾 保存历史记录（任务 {i}）: user='{subtask[:30]}...', assistant='{assistant_summary[:50]}...'")
+                            session_manager.update_history(
+                                file_id=file_id,
+                                user_msg=subtask,
+                                assistant_msg=assistant_summary
+                            )
+                        else:
+                            error_msg = result.get("error", "未知错误")
+                            execution_log.append(f"❌ 任务 {i} 执行失败: {error_msg}")
+                            all_success = False
+                            await sio.emit('progress', {
+                                'type': 'task_error',
+                                'message': f"❌ 任务 {i} 执行失败: {error_msg}",
+                                'task_index': i
+                            }, room=sid)
+                            break
+                else:
+                    logger.warning(f"任务 {i} 没有工具调用")
+                    all_success = False
+                    break
+                            
+            logger.info(f"✅ {len(task_list)} 个子任务全部翻译和执行完成")
+            
+            # ⭐️ 保存文件（修复：最后一个任务处理问题）
+            if last_successful_task_idx > 0:
+                await sio.emit('progress', {
+                    'type': 'saving',
+                    'message': '💾 正在保存文件...'
+                }, room=sid)
+                await asyncio.sleep(0.3)
+                
+                try:
+                    final_output_path = config.UPLOAD_DIR / f"{file_id}_result.xlsx"
+                    engine.save(str(final_output_path))
+                    logger.info(f"✅ 文件已保存: {final_output_path}")
+                except Exception as save_error:
+                    logger.error(f"❌ 文件保存失败: {save_error}")
+                    execution_log.append(f"❌ 文件保存失败: {save_error}")
+            
+            # ⭐️ 所有子任务已完成，返回结果
+            await sio.emit('progress', {
+                'type': 'done',
+                'message': '✅ 所有任务执行完成',
+                'success': all_success,
+                'execution_log': execution_log,
+                'download_url': f'/download/{file_id}' if last_successful_task_idx > 0 else None
+            }, room=sid)
+            return
+        else:
+            # 已经是翻译结果（List[AIResponse]）
+            translation_results = tasks
+            logger.info(f"✅ 收到 {len(translation_results)} 个翻译结果")
         
         total_tasks = len(translation_results)
         
