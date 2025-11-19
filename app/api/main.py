@@ -11,9 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import uuid
 import json
-from typing import Dict
+from typing import Dict, List, Any
 import logging
 import os
+from pydantic import BaseModel
 
 from ..core.excel_engine import ExcelEngine
 from ..core.ai_translator import get_translator
@@ -201,6 +202,45 @@ async def preview_file(file_id: str, rows: int = 10):
     
     engine = engines[file_id]
     return engine.get_preview(rows=rows)
+
+
+@app.get("/files/{file_id}/content")
+async def get_file_content(file_id: str):
+    """
+    获取文件完整内容（用于前端编辑）
+    """
+    if file_id not in engines:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    engine = engines[file_id]
+    return engine.get_all_data()
+
+
+class UpdateContentRequest(BaseModel):
+    data: List[List[Any]]
+
+
+@app.post("/files/{file_id}/content")
+async def update_file_content(file_id: str, request: UpdateContentRequest):
+    """
+    更新文件内容（前端编辑保存）
+    """
+    if file_id not in engines:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    engine = engines[file_id]
+    result = engine.update_data(request.data)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result.get("error", "更新失败"))
+    
+    # 保存到磁盘（result文件）
+    result_path = config.UPLOAD_DIR / f"{file_id}_result.xlsx"
+    engine.save(str(result_path))
+    logger.info(f"实时编辑已保存到: {result_path}")
+    
+    return result
+
 
 
 @app.delete("/cleanup/{file_id}")

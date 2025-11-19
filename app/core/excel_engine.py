@@ -1129,6 +1129,80 @@ class ExcelEngine:
         self.df = self.original_df.copy()
         self.execution_log = []
         logger.info("已重置到原始状态")
+
+    def get_all_data(self) -> Dict:
+        """
+        获取所有数据(用于前端 Handsontable 显示)
+        Returns:
+            包含表头和数据的字典
+        """
+        import numpy as np
+        import math
+        
+        def clean_value(val):
+            """清理单个值，确保JSON兼容"""
+            # 处理None
+            if val is None:
+                return None
+            
+            # 处理numpy和Python的数值类型
+            if isinstance(val, (np.integer, np.floating)):
+                val = val.item()  # 转换为Python原生类型
+            
+            # 处理float类型的特殊值
+            if isinstance(val, float):
+                if math.isnan(val) or math.isinf(val):
+                    return None
+            
+            return val
+        
+        # 逐行处理数据
+        cleaned_data = []
+        for _, row in self.df.iterrows():
+            cleaned_row = [clean_value(val) for val in row]
+            cleaned_data.append(cleaned_row)
+        
+        return {
+            "headers": list(self.df.columns),
+            "data": cleaned_data
+        }
+
+    def update_data(self, data: List[List[Any]]) -> Dict:
+        """
+        更新所有数据（从前端 Handsontable 保存）
+        Args:
+            data: 二维数组数据（包含表头）
+        Returns:
+            执行结果
+        """
+        try:
+            if not data or len(data) < 1:
+                return {"success": False, "error": "数据为空"}
+            
+            # 第一行是表头
+            headers = data[0]
+            rows = data[1:]
+            
+            # 更新 DataFrame
+            self.df = pd.DataFrame(rows, columns=headers)
+            
+            # 尝试自动推断数据类型（否则都是字符串）
+            self.df = self.df.infer_objects()
+            
+            log_msg = f"✅ 已手动更新表格数据 ({len(self.df)} 行)"
+            logger.info(log_msg)
+            self.execution_log.append(log_msg)
+            
+            return {
+                "success": True,
+                "message": log_msg,
+                "total_rows": len(self.df)
+            }
+        except Exception as e:
+            error_msg = f"数据更新失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
     
     def execute_tool(self, tool_name: str, parameters: Dict) -> Dict:
         """

@@ -800,10 +800,10 @@ body {
 }
 
 .feature-example-hint {
-    color: var(--text-secondary);
-    font-size: 0.75em;
+    font-size: 0.8em;
+    color: var(--text-muted);
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity 0.3s;
 }
 
 .feature-example:hover .feature-example-hint {
@@ -813,11 +813,70 @@ body {
 .modal-footer {
     margin-top: 20px;
     padding-top: 15px;
-    border-top: 2px solid var(--border-color);
-    text-align: center;
+    border-top: 1px solid var(--border-color);
     color: var(--text-secondary);
-    font-size: 0.85em;
+    font-size: 0.9em;
+    text-align: center;
 }
+
+/* ==================== 编辑器模态框特有样式 ==================== */
+.editor-modal-content {
+    width: 90vw;
+    max-width: 1200px;
+    height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0; /* 重置 padding */
+}
+
+.editor-modal-content .modal-header {
+    padding: 20px 30px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.editor-container {
+    flex: 1;
+    overflow: hidden;
+    padding: 0;
+    position: relative;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.modal-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.modal-btn.primary {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+}
+
+.modal-btn.primary:hover {
+    background: var(--primary-dark);
+}
+
+.modal-btn.secondary {
+    background: white;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.modal-btn.secondary:hover {
+    background: var(--bg-color);
+    color: var(--text-primary);
+}
+
 
 /* ==================== 响应式设计 ==================== */
 @media (max-width: 1024px) {

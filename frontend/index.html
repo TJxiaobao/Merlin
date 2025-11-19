@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🧙 Merlin - AI Excel 助手</title>
+    <!-- Handsontable -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
 </head>
+
 <body>
     <!-- 顶部栏 -->
     <div class="topbar">
@@ -24,7 +29,7 @@
             <!-- 区域 1: 文件操作 -->
             <div class="sidebar-section file-section">
                 <div class="section-title">📁 文件</div>
-                
+
                 <!-- 未上传状态 -->
                 <div class="file-upload-area" id="dropZone">
                     <div class="upload-icon">📁</div>
@@ -42,6 +47,9 @@
                     <div class="file-actions">
                         <button class="file-action-btn" id="downloadOriginalBtn" title="下载原始文件">
                             📥 下载原始
+                        </button>
+                        <button class="file-action-btn" id="editFileBtn" title="实时编辑">
+                            ✏️ 实时编辑
                         </button>
                         <button class="file-action-btn" id="uploadNewBtn" title="上传新文件">
                             🔄 上传新文件
@@ -104,12 +112,7 @@
                     <button class="magic-wand-btn" id="magicWandBtn" disabled title="查看所有功能">
                         ✨
                     </button>
-                    <textarea 
-                        id="commandInput" 
-                        placeholder="请先上传Excel文件..." 
-                        rows="1"
-                        disabled
-                    ></textarea>
+                    <textarea id="commandInput" placeholder="请先上传Excel文件..." rows="1" disabled></textarea>
                     <button class="send-btn" id="sendBtn" disabled>
                         <span id="sendBtnText">发送</span>
                     </button>
@@ -220,6 +223,21 @@
         </div>
     </div>
 
+    <!-- 编辑器模态框 -->
+    <div class="modal-overlay" id="editorModal" style="display: none;">
+        <div class="modal-content editor-modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">📝 实时编辑</h2>
+                <div class="modal-actions">
+                    <button class="modal-btn secondary" id="editorCancelBtn">取消</button>
+                    <button class="modal-btn primary" id="editorSaveBtn">保存修改</button>
+                </div>
+            </div>
+            <div class="editor-container" id="spreadsheetEditor"></div>
+        </div>
+    </div>
+
     <script type="module" src="/main.js"></script>
 </body>
+
 </html>
